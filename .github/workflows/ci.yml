@@ -104,3 +104,11 @@ jobs:
         run: cargo install tauri-driver --locked
       - name: Run real UI integration test
         run: xvfb-run -a npm run test:e2e
+      - name: Upload desktop UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbux-pr-ui-screenshots
+          path: artifacts/screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 14
