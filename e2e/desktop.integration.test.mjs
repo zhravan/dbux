@@ -30,9 +30,11 @@ async function captureScreenshot(filename) {
 }
 
 async function readDom(selector, property = "textContent") {
-  const elements = await browser.findElements(By.css(selector));
-  if (!elements.length) return null;
-  return elements[0].getDomProperty(property);
+  return browser.executeScript(
+    "const element = document.querySelector(arguments[0]); return element ? element[arguments[1]] : null;",
+    selector,
+    property,
+  );
 }
 
 async function waitForDriver() {
@@ -62,7 +64,7 @@ async function fill(selector, value) {
   await element.clear();
   await element.sendKeys(value);
   await browser.wait(
-    async () => (await element.getDomProperty("value")) === value,
+    async () => (await readDom(selector, "value")) === value,
     3_000,
     `Input ${selector} did not retain the requested value`,
   );
@@ -74,25 +76,17 @@ async function waitForConnection() {
 
   while (Date.now() < deadline) {
     const active = await browser.findElements(By.css('[data-testid="active-connection"]'));
-    const nameElements = await browser.findElements(
-      By.css('[data-testid="active-connection"] .connection-entry-copy strong'),
-    );
-    const errors = await browser.findElements(By.css('[data-testid="connection-error"]'));
-    const detail = nameElements.length
-      ? ((await nameElements[0].getDomProperty("textContent")) ?? "").trim()
-      : "";
-    const error = errors.length
-      ? ((await errors[0].getDomProperty("textContent")) ?? "").trim()
-      : "";
+    const name = ((await readDom('[data-testid="active-connection"] .connection-entry-copy strong')) ?? "").trim();
+    const error = ((await readDom('[data-testid="connection-error"]')) ?? "").trim();
 
     lastDiagnostic = {
       active: active.length > 0,
-      name: detail,
+      name,
       error,
-      activeHtml: active.length ? await active[0].getDomProperty("innerHTML") : "",
+      activeHtml: active.length ? await readDom('[data-testid="active-connection"]', "innerHTML") : "",
     };
 
-    if (detail) return { ok: true, detail };
+    if (name) return { ok: true, detail: name };
     if (error) return { ok: false, detail: error };
     await delay(200);
   }
@@ -152,6 +146,7 @@ test(
     try {
       await browser.wait(until.elementLocated(By.css(".app-shell")), 15_000);
       console.log("[e2e] Desktop shell loaded");
+      console.log("[e2e] Desktop shell loaded");
       await click(".workspace-toolbar .primary-button");
       await browser.wait(until.elementLocated(By.css('[data-testid="connect-database"]')), 5_000);
 
@@ -164,8 +159,9 @@ test(
 
       const sslMode = await browser.findElement(By.css('select[aria-label="SSL mode"]'));
       await sslMode.sendKeys("Disable (local only)");
-      assert.equal(await sslMode.getDomProperty("value"), "disable");
+      assert.equal(await readDom('select[aria-label="SSL mode"]', "value"), "disable");
       await click('[data-testid="connect-database"]');
+      console.log("[e2e] Submitted PostgreSQL connection");
       console.log("[e2e] Submitted PostgreSQL connection");
 
       const connection = await waitForConnection();
