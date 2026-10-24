@@ -41,8 +41,8 @@ async function fill(selector, value) {
 async function waitForConnection() {
   return browser.wait(
     async () => {
-      const active = await browser.findElements(By.css('[data-testid="active-connection"]'));
-      if (active.length) return { ok: true, detail: await active[0].getText() };
+      const names = await browser.findElements(By.css('[data-testid="active-connection"] .connection-entry-copy strong'));
+      if (names.length) return { ok: true, detail: await names[0].getText() };
 
       const errors = await browser.findElements(By.css('[data-testid="connection-error"]'));
       if (errors.length) {
