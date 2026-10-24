@@ -194,9 +194,7 @@ async fn execute_query(
                 row.columns()
                     .iter()
                     .enumerate()
-                    .map(|(index, column)| {
-                        decode_cell(row, index, column.type_info().name())
-                    })
+                    .map(|(index, column)| decode_cell(row, index, column.type_info().name()))
                     .collect()
             })
             .collect::<Vec<Vec<Value>>>();
