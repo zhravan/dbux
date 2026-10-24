@@ -4,7 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { after, before, test } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Builder, By, until } from "selenium-webdriver";
+import { Builder, By, Key, until } from "selenium-webdriver";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const application = path.join(root, "src-tauri", "target", "release", "dbux");
@@ -35,8 +35,8 @@ async function click(selector) {
 async function fill(selector, value) {
   const element = await browser.wait(until.elementLocated(By.css(selector)), 10_000);
   await element.click();
-  await element.sendKeys("\u0001");
-  await element.sendKeys(value);
+  await element.sendKeys(Key.CONTROL, "a");
+  await element.sendKeys(Key.BACK_SPACE, value);
 }
 
 async function waitForConnection() {
