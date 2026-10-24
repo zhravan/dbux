@@ -2,7 +2,7 @@
 
 A focused, database-agnostic desktop workbench for developers.
 
-DBUX is being built around a simple idea: database work should feel fast, predictable, and uncluttered. The product prioritizes SQL, schema browsing, query results, keyboard workflows, and reliable local connections.
+DBUX is built around a simple idea: database work should feel fast, predictable, and uncluttered. The product prioritizes SQL, schema browsing, query results, keyboard workflows, and reliable local connections.
 
 ## Product principles
 
@@ -14,7 +14,7 @@ DBUX is being built around a simple idea: database work should feel fast, predic
 
 ## Project status
 
-Early development. The current branch establishes the desktop shell and developer tooling. Database connectivity, query execution, and editable results are not implemented yet.
+Early development. The current implementation supports connecting to PostgreSQL, executing SQL from the desktop UI, and displaying initial query results. SQLite support, secure OS credential storage, query cancellation, bounded result streaming, schema browsing, editable rows, and additional drivers are not implemented yet.
 
 See [the implementation checklist](docs/IMPLEMENTATION_CHECKLIST.md) for the phased roadmap and acceptance criteria.
 
@@ -53,6 +53,12 @@ cd src-tauri
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all
+```
+
+Desktop UI + PostgreSQL integration test (Linux CI dependencies, PostgreSQL service, and `tauri-driver` required):
+
+```sh
+npm run test:e2e
 ```
 
 ## License
