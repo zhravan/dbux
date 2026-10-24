@@ -5,7 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { after, before, test } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Builder, By, until } from "selenium-webdriver";
+import { Builder, By, Key, until } from "selenium-webdriver";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const application = path.join(root, "src-tauri", "target", "release", "dbux");
@@ -14,18 +14,25 @@ const driverUrl = "http://127.0.0.1:4444";
 let tauriDriver;
 let browser;
 
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function captureScreenshot(filename) {
   await mkdir(screenshotDirectory, { recursive: true });
-  const screenshot = await browser.takeScreenshot();
+  const screenshot = await withTimeout(browser.takeScreenshot(), 8_000, `Screenshot ${filename}`);
   await writeFile(path.join(screenshotDirectory, filename), Buffer.from(screenshot, "base64"));
+  console.log(`[e2e] Screenshot saved: ${filename}`);
 }
 
 async function readDom(selector, property = "textContent") {
-  return browser.executeScript(
-    "const element = document.querySelector(arguments[0]); return element ? element[arguments[1]] : null;",
-    selector,
-    property,
-  );
+  const elements = await browser.findElements(By.css(selector));
+  if (!elements.length) return null;
+  return elements[0].getDomProperty(property);
 }
 
 async function waitForDriver() {
@@ -55,7 +62,7 @@ async function fill(selector, value) {
   await element.clear();
   await element.sendKeys(value);
   await browser.wait(
-    async () => (await readDom(selector, "value")) === value,
+    async () => (await element.getDomProperty("value")) === value,
     3_000,
     `Input ${selector} did not retain the requested value`,
   );
@@ -66,20 +73,27 @@ async function waitForConnection() {
   let lastDiagnostic = {};
 
   while (Date.now() < deadline) {
-    lastDiagnostic = await browser.executeScript(() => {
-      const active = document.querySelector('[data-testid="active-connection"]');
-      const name = active?.querySelector(".connection-entry-copy strong")?.textContent?.trim() ?? "";
-      const error = document.querySelector('[data-testid="connection-error"]')?.textContent?.trim() ?? "";
-      return {
-        active: Boolean(active),
-        name,
-        error,
-        activeHtml: active?.innerHTML ?? "",
-      };
-    });
+    const active = await browser.findElements(By.css('[data-testid="active-connection"]'));
+    const nameElements = await browser.findElements(
+      By.css('[data-testid="active-connection"] .connection-entry-copy strong'),
+    );
+    const errors = await browser.findElements(By.css('[data-testid="connection-error"]'));
+    const detail = nameElements.length
+      ? ((await nameElements[0].getDomProperty("textContent")) ?? "").trim()
+      : "";
+    const error = errors.length
+      ? ((await errors[0].getDomProperty("textContent")) ?? "").trim()
+      : "";
 
-    if (lastDiagnostic.name) return { ok: true, detail: lastDiagnostic.name };
-    if (lastDiagnostic.error) return { ok: false, detail: lastDiagnostic.error };
+    lastDiagnostic = {
+      active: active.length > 0,
+      name: detail,
+      error,
+      activeHtml: active.length ? await active[0].getDomProperty("innerHTML") : "",
+    };
+
+    if (detail) return { ok: true, detail };
+    if (error) return { ok: false, detail: error };
     await delay(200);
   }
 
@@ -89,10 +103,11 @@ async function waitForConnection() {
 async function executeSql(statement, expectedStatus) {
   await fill('[data-testid="sql-editor"]', statement);
   await click('[data-testid="run-query"]');
+  console.log(`[e2e] Executed SQL: ${statement.split("\n")[0].slice(0, 100)}`);
 
   return browser.wait(
     async () => {
-      const status = (await readDom('[data-testid="query-status"]')) ?? "";
+      const status = ((await readDom('[data-testid="query-status"]')) ?? "").trim();
       if (status.includes("Query failed")) {
         const detail = (await readDom('[data-testid="query-error"]')) ?? status;
         throw new Error(`SQL failed: ${detail}`);
@@ -122,78 +137,84 @@ before(async () => {
 after(async () => {
   if (browser) {
     try {
-      await browser.quit();
+      await withTimeout(browser.quit(), 8_000, "Closing WebDriver session");
     } catch {
-      // Preserve the test failure if the WebDriver session already exited.
+      // Preserve the test failure if the WebDriver session already exited or hangs.
     }
   }
   if (tauriDriver && !tauriDriver.killed) tauriDriver.kill("SIGTERM");
 });
 
-test("connects to PostgreSQL and inserts/reads a row through the desktop UI", async () => {
-  try {
-    await browser.wait(until.elementLocated(By.css(".app-shell")), 15_000);
-    await click(".workspace-toolbar .primary-button");
-    await browser.wait(until.elementLocated(By.css('[data-testid="connect-database"]')), 5_000);
+test(
+  "connects to PostgreSQL and inserts/reads a row through the desktop UI",
+  { timeout: 150_000 },
+  async () => {
+    try {
+      await browser.wait(until.elementLocated(By.css(".app-shell")), 15_000);
+      console.log("[e2e] Desktop shell loaded");
+      await click(".workspace-toolbar .primary-button");
+      await browser.wait(until.elementLocated(By.css('[data-testid="connect-database"]')), 5_000);
 
-    await fill('input[aria-label="Connection name"]', "CI PostgreSQL");
-    await fill('input[aria-label="Host"]', process.env.DBUX_TEST_DB_HOST ?? "127.0.0.1");
-    await fill('input[aria-label="Port"]', process.env.DBUX_TEST_DB_PORT ?? "5432");
-    await fill('input[aria-label="Database"]', process.env.DBUX_TEST_DB_NAME ?? "dbux_test");
-    await fill('input[aria-label="Username"]', process.env.DBUX_TEST_DB_USER ?? "dbux_test");
-    await fill('input[aria-label="Password"]', process.env.DBUX_TEST_DB_PASSWORD ?? "dbux_test");
+      await fill('input[aria-label="Connection name"]', "CI PostgreSQL");
+      await fill('input[aria-label="Host"]', process.env.DBUX_TEST_DB_HOST ?? "127.0.0.1");
+      await fill('input[aria-label="Port"]', process.env.DBUX_TEST_DB_PORT ?? "5432");
+      await fill('input[aria-label="Database"]', process.env.DBUX_TEST_DB_NAME ?? "dbux_test");
+      await fill('input[aria-label="Username"]', process.env.DBUX_TEST_DB_USER ?? "dbux_test");
+      await fill('input[aria-label="Password"]', process.env.DBUX_TEST_DB_PASSWORD ?? "dbux_test");
 
-    const sslMode = await browser.findElement(By.css('select[aria-label="SSL mode"]'));
-    await sslMode.sendKeys("Disable (local only)");
-    assert.equal(await readDom('select[aria-label="SSL mode"]', "value"), "disable");
-    await click('[data-testid="connect-database"]');
+      const sslMode = await browser.findElement(By.css('select[aria-label="SSL mode"]'));
+      await sslMode.sendKeys("Disable (local only)");
+      assert.equal(await sslMode.getDomProperty("value"), "disable");
+      await click('[data-testid="connect-database"]');
+      console.log("[e2e] Submitted PostgreSQL connection");
 
-    const connection = await waitForConnection();
-    assert.equal(connection.ok, true, `Could not connect to PostgreSQL: ${connection.detail}`);
-    assert.equal(connection.detail, "CI PostgreSQL", "Connected database name should match the submitted name");
-    await captureScreenshot("01-connected.png");
+      const connection = await waitForConnection();
+      assert.equal(connection.ok, true, `Could not connect to PostgreSQL: ${connection.detail}`);
+      assert.equal(connection.detail, "CI PostgreSQL", "Connected database name should match the submitted name");
+      await captureScreenshot("01-connected.png");
 
-    await executeSql(
-      "CREATE TABLE IF NOT EXISTS dbux_e2e_items (id BIGSERIAL PRIMARY KEY, label TEXT NOT NULL)",
-      "Statement completed",
-    );
-    await executeSql("TRUNCATE TABLE dbux_e2e_items RESTART IDENTITY", "Statement completed");
+      await executeSql(
+        "CREATE TABLE IF NOT EXISTS dbux_e2e_items (id BIGSERIAL PRIMARY KEY, label TEXT NOT NULL)",
+        "Statement completed",
+      );
+      await executeSql("TRUNCATE TABLE dbux_e2e_items RESTART IDENTITY", "Statement completed");
 
-    const insertedLabel = `inserted-through-ui-${Date.now()}`;
-    await executeSql(
-      `INSERT INTO dbux_e2e_items (label) VALUES ('${insertedLabel}') RETURNING id, label`,
-      "Query completed",
-    );
-    const insertedCell = await browser.wait(
-      async () => {
-        const value = await readDom('[data-testid="result-cell-0-1"]');
-        return value === insertedLabel ? value : false;
-      },
-      10_000,
-      "Inserted row was not shown in the results grid",
-    );
-    assert.equal(insertedCell, insertedLabel);
-    await captureScreenshot("02-insert-returning.png");
+      const insertedLabel = `inserted-through-ui-${Date.now()}`;
+      await executeSql(
+        `INSERT INTO dbux_e2e_items (label) VALUES ('${insertedLabel}') RETURNING id, label`,
+        "Query completed",
+      );
+      const insertedCell = await browser.wait(
+        async () => {
+          const value = await readDom('[data-testid="result-cell-0-1"]');
+          return value === insertedLabel ? value : false;
+        },
+        10_000,
+        "Inserted row was not shown in the results grid",
+      );
+      assert.equal(insertedCell, insertedLabel);
+      await captureScreenshot("02-insert-returning.png");
 
-    await executeSql("SELECT id, label FROM dbux_e2e_items ORDER BY id", "Query completed");
-    const selectedCell = await browser.wait(
-      async () => {
-        const value = await readDom('[data-testid="result-cell-0-1"]');
-        return value === insertedLabel ? value : false;
-      },
-      10_000,
-      "Inserted row could not be read back from PostgreSQL",
-    );
-    assert.equal(selectedCell, insertedLabel);
-    await captureScreenshot("03-select-readback.png");
-  } catch (error) {
-    if (browser) {
-      try {
-        await captureScreenshot("failure.png");
-      } catch {
-        // Preserve the original failure if a screenshot cannot be captured.
+      await executeSql("SELECT id, label FROM dbux_e2e_items ORDER BY id", "Query completed");
+      const selectedCell = await browser.wait(
+        async () => {
+          const value = await readDom('[data-testid="result-cell-0-1"]');
+          return value === insertedLabel ? value : false;
+        },
+        10_000,
+        "Inserted row could not be read back from PostgreSQL",
+      );
+      assert.equal(selectedCell, insertedLabel);
+      await captureScreenshot("03-select-readback.png");
+    } catch (error) {
+      if (browser) {
+        try {
+          await captureScreenshot("failure.png");
+        } catch (screenshotError) {
+          console.warn(`[e2e] Could not capture failure screenshot: ${String(screenshotError)}`);
+        }
       }
+      throw error;
     }
-    throw error;
-  }
-});
+  },
+);
