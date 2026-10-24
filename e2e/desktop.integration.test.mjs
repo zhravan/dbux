@@ -34,7 +34,8 @@ async function click(selector) {
 
 async function fill(selector, value) {
   const element = await browser.wait(until.elementLocated(By.css(selector)), 10_000);
-  await element.clear();
+  await element.click();
+  await element.sendKeys("\u0001");
   await element.sendKeys(value);
 }
 
@@ -113,6 +114,9 @@ test("connects to PostgreSQL and inserts/reads a row through the desktop UI", as
   await fill('input[aria-label="Username"]', process.env.DBUX_TEST_DB_USER ?? "dbux_test");
   await fill('input[aria-label="Password"]', process.env.DBUX_TEST_DB_PASSWORD ?? "dbux_test");
 
+  const connectionName = await browser.findElement(By.css('input[aria-label="Connection name"]'));
+  assert.equal(await connectionName.getAttribute("value"), "CI PostgreSQL", "Connection name input was not populated");
+
   const sslMode = await browser.findElement(By.css('select[aria-label="SSL mode"]'));
   await sslMode.sendKeys("Disable (local only)");
   await click('[data-testid="connect-database"]');
@@ -123,7 +127,7 @@ test("connects to PostgreSQL and inserts/reads a row through the desktop UI", as
     true,
     `Could not connect to the PostgreSQL service: ${connection.detail}`,
   );
-  assert.match(connection.detail, /CI PostgreSQL/);
+  assert.equal(connection.detail, "CI PostgreSQL", "Connected database name should match the submitted connection name");
 
   await executeSql(
     "CREATE TABLE IF NOT EXISTS dbux_e2e_items (id BIGSERIAL PRIMARY KEY, label TEXT NOT NULL)",
