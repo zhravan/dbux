@@ -229,8 +229,10 @@ async fn execute_query(
 fn returns_rows(sql: &str) -> bool {
     let upper = sql.trim_start().to_ascii_uppercase();
     let first = upper.split_whitespace().next().unwrap_or_default();
-    matches!(first, "SELECT" | "WITH" | "SHOW" | "VALUES" | "EXPLAIN" | "TABLE")
-        || upper.contains("RETURNING")
+    matches!(
+        first,
+        "SELECT" | "WITH" | "SHOW" | "VALUES" | "EXPLAIN" | "TABLE"
+    ) || upper.contains("RETURNING")
 }
 
 fn decode_cell(row: &PgRow, index: usize, type_name: &str) -> Value {
