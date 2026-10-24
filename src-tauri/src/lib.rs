@@ -116,10 +116,7 @@ async fn connect_postgres(
         .await
         .map_err(|error| format_database_error(&error.to_string()))?;
 
-    let id = format!(
-        "pg-{}",
-        NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed)
-    );
+    let id = format!("pg-{}", NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed));
     state
         .pools
         .lock()
