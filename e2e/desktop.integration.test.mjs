@@ -34,9 +34,15 @@ async function click(selector) {
 
 async function fill(selector, value) {
   const element = await browser.wait(until.elementLocated(By.css(selector)), 10_000);
+  await browser.wait(until.elementIsVisible(element), 5_000);
   await element.click();
-  await element.sendKeys(Key.CONTROL, "a");
-  await element.sendKeys(Key.BACK_SPACE, value);
+  await element.clear();
+  await element.sendKeys(value);
+  await browser.wait(
+    async () => (await element.getDomProperty("value")) === value,
+    3_000,
+    `Input ${selector} did not retain the requested value`,
+  );
 }
 
 async function waitForConnection() {
@@ -115,7 +121,7 @@ test("connects to PostgreSQL and inserts/reads a row through the desktop UI", as
   await fill('input[aria-label="Password"]', process.env.DBUX_TEST_DB_PASSWORD ?? "dbux_test");
 
   const connectionName = await browser.findElement(By.css('input[aria-label="Connection name"]'));
-  assert.equal(await connectionName.getAttribute("value"), "CI PostgreSQL", "Connection name input was not populated");
+  assert.equal(await connectionName.getDomProperty("value"), "CI PostgreSQL", "Connection name input was not populated");
 
   const sslMode = await browser.findElement(By.css('select[aria-label="SSL mode"]'));
   await sslMode.sendKeys("Disable (local only)");
