@@ -3,7 +3,6 @@ import {
   Activity,
   ChevronDown,
   CircleHelp,
-  Command,
   Database,
   FileClock,
   FolderOpen,
@@ -16,7 +15,7 @@ import {
   Play,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 type WorkspaceTab = "query" | "history";
 type CellValue = string | number | boolean | null | Record<string, unknown> | unknown[];
@@ -130,7 +129,7 @@ export default function App() {
     }
   };
 
-  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
       void runQuery();
