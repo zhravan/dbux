@@ -84,6 +84,8 @@ jobs:
             exit 1
           }
       - run: npm install --no-audit --no-fund
+      - name: Generate platform icons
+        run: npm run tauri -- icon src-tauri/icons/icon.svg --output src-tauri/icons
       - name: Build native installer
         run: npm run tauri build -- --bundles "${{ matrix.bundles }}"
       - name: Upload Linux installers
