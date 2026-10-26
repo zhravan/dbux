@@ -67,11 +67,30 @@ struct SchemaColumnInfo {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct SchemaIndexInfo {
+    name: String,
+    definition: String,
+    unique: bool,
+    primary: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SchemaConstraintInfo {
+    name: String,
+    constraint_type: String,
+    definition: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SchemaObjectInfo {
     schema_name: String,
     object_name: String,
     object_type: String,
     columns: Vec<SchemaColumnInfo>,
+    indexes: Vec<SchemaIndexInfo>,
+    constraints: Vec<SchemaConstraintInfo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -265,10 +284,115 @@ async fn list_schema_objects(
                 object_name,
                 object_type,
                 columns: Vec::new(),
+                indexes: Vec::new(),
+                constraints: Vec::new(),
             });
         }
         if let Some(object) = objects.last_mut() {
             object.columns.push(column);
+        }
+    }
+
+    let index_rows = sqlx::query(
+        r#"
+        SELECT
+            ns.nspname AS schema_name,
+            tbl.relname AS object_name,
+            idx.relname AS index_name,
+            ix.indisunique AS is_unique,
+            ix.indisprimary AS is_primary,
+            pg_get_indexdef(ix.indexrelid) AS definition
+        FROM pg_index ix
+        JOIN pg_class tbl ON tbl.oid = ix.indrelid
+        JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+        JOIN pg_class idx ON idx.oid = ix.indexrelid
+        WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND tbl.relkind IN ('r', 'p', 'f')
+        ORDER BY ns.nspname, tbl.relname, idx.relname
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|error| format_database_error(&error.to_string()))?;
+
+    for row in index_rows {
+        let schema_name: String = row
+            .try_get("schema_name")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let object_name: String = row
+            .try_get("object_name")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let index = SchemaIndexInfo {
+            name: row
+                .try_get("index_name")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            definition: row
+                .try_get("definition")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            unique: row
+                .try_get("is_unique")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            primary: row
+                .try_get("is_primary")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+        };
+        if let Some(object) = objects.iter_mut().find(|object| {
+            object.schema_name == schema_name && object.object_name == object_name
+        }) {
+            object.indexes.push(index);
+        }
+    }
+
+    let constraint_rows = sqlx::query(
+        r#"
+        SELECT
+            ns.nspname AS schema_name,
+            tbl.relname AS object_name,
+            con.conname AS constraint_name,
+            CASE con.contype
+                WHEN 'p' THEN 'Primary key'
+                WHEN 'f' THEN 'Foreign key'
+                WHEN 'u' THEN 'Unique'
+                WHEN 'c' THEN 'Check'
+                WHEN 'x' THEN 'Exclusion'
+                ELSE 'Other'
+            END AS constraint_type,
+            pg_get_constraintdef(con.oid, true) AS definition
+        FROM pg_constraint con
+        JOIN pg_class tbl ON tbl.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+        WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND con.contype IN ('p', 'f', 'u', 'c', 'x')
+          AND tbl.relkind IN ('r', 'p', 'f', 'm')
+        ORDER BY ns.nspname, tbl.relname, con.conname
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|error| format_database_error(&error.to_string()))?;
+
+    for row in constraint_rows {
+        let schema_name: String = row
+            .try_get("schema_name")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let object_name: String = row
+            .try_get("object_name")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let constraint = SchemaConstraintInfo {
+            name: row
+                .try_get("constraint_name")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            constraint_type: row
+                .try_get("constraint_type")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            definition: row
+                .try_get("definition")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+        };
+        if let Some(object) = objects.iter_mut().find(|object| {
+            object.schema_name == schema_name && object.object_name == object_name
+        }) {
+            object.constraints.push(constraint);
         }
     }
 

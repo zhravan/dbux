@@ -170,10 +170,14 @@ test(
       await captureScreenshot("01-connected.png");
 
       await executeSql(
-        "CREATE TABLE IF NOT EXISTS dbux_e2e_items (id BIGSERIAL PRIMARY KEY, label TEXT NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS dbux_e2e_items (id BIGSERIAL PRIMARY KEY, label TEXT NOT NULL UNIQUE, CONSTRAINT dbux_e2e_items_label_check CHECK (length(label) > 0))",
         "Statement completed",
       );
-      await executeSql("TRUNCATE TABLE dbux_e2e_items RESTART IDENTITY", "Statement completed");
+      await executeSql(
+        "CREATE TABLE IF NOT EXISTS dbux_e2e_items_child (id BIGSERIAL PRIMARY KEY, item_id BIGINT NOT NULL REFERENCES dbux_e2e_items(id), CONSTRAINT dbux_e2e_items_child_item_id_check CHECK (item_id > 0))",
+        "Statement completed",
+      );
+      await executeSql("TRUNCATE TABLE dbux_e2e_items_child, dbux_e2e_items RESTART IDENTITY", "Statement completed");
 
       const insertedLabel = `inserted-through-ui-${Date.now()}`;
       await executeSql(
@@ -232,6 +236,27 @@ test(
       const labelColumn = await readDom('[data-testid="schema-column-public-dbux_e2e_items-label"]');
       assert.match(labelColumn, /label.*text/i);
       assert.match(labelColumn, /NOT NULL/);
+
+      const primaryIndex = await readDom('[data-testid="schema-index-public-dbux_e2e_items-dbux_e2e_items_pkey"]');
+      assert.match(primaryIndex, /PRIMARY KEY/);
+      const uniqueIndex = await readDom('[data-testid="schema-index-public-dbux_e2e_items-dbux_e2e_items_label_key"]');
+      assert.match(uniqueIndex, /UNIQUE/);
+      const primaryConstraint = await readDom('[data-testid="schema-constraint-public-dbux_e2e_items-dbux_e2e_items_pkey"]');
+      assert.match(primaryConstraint, /Primary key/);
+      const uniqueConstraint = await readDom('[data-testid="schema-constraint-public-dbux_e2e_items-dbux_e2e_items_label_key"]');
+      assert.match(uniqueConstraint, /Unique/);
+      const checkConstraint = await readDom('[data-testid="schema-constraint-public-dbux_e2e_items-dbux_e2e_items_label_check"]');
+      assert.match(checkConstraint, /Check/);
+      await click('[data-testid="schema-object-public-dbux_e2e_items_child"]');
+      const foreignKeyConstraint = await browser.wait(
+        async () => {
+          const value = await readDom('[data-testid="schema-constraint-public-dbux_e2e_items_child-dbux_e2e_items_child_item_id_fkey"]');
+          return value || false;
+        },
+        10_000,
+        "The foreign-key constraint was not shown for the child table",
+      );
+      assert.match(foreignKeyConstraint, /Foreign key/);
       await captureScreenshot("04-schema-explorer.png");
       await click('[data-testid="preview-table-public-dbux_e2e_items"]');
       await browser.wait(
