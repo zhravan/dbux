@@ -32,6 +32,8 @@ interface QueryResult {
   rows: CellValue[][];
   rowsAffected: number;
   durationMs: number;
+  truncated: boolean;
+  rowLimit: number;
   message: string;
 }
 
@@ -241,6 +243,11 @@ export default function App() {
                   <div className="query-error" role="alert" data-testid="query-error"><strong>Query failed</strong><span>{queryError}</span></div>
                 ) : queryResult && queryResult.columns.length > 0 ? (
                   <div className="result-grid-wrap" data-testid="query-results">
+                    {queryResult.truncated && (
+                      <div className="result-truncation" role="status" data-testid="result-truncation">
+                        Showing the first {queryResult.rowLimit.toLocaleString()} rows. Additional rows were omitted to keep results responsive.
+                      </div>
+                    )}
                     <table className="result-grid">
                       <thead><tr>{queryResult.columns.map((column) => <th key={column.name}><span>{column.name}</span><small>{column.dataType}</small></th>)}</tr></thead>
                       <tbody>

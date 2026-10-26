@@ -9,6 +9,7 @@ use std::{
 
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{
@@ -19,6 +20,7 @@ use tauri::State;
 use uuid::Uuid;
 
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+const DEFAULT_QUERY_ROW_LIMIT: usize = 1_000;
 
 #[derive(Default)]
 struct DbState {
@@ -60,6 +62,8 @@ struct QueryExecutionResult {
     rows: Vec<Vec<Value>>,
     rows_affected: u64,
     duration_ms: u128,
+    truncated: bool,
+    row_limit: usize,
     message: String,
 }
 
@@ -170,10 +174,20 @@ async fn execute_query(
 
     let started = Instant::now();
     if returns_rows(statement) {
-        let fetched = sqlx::query(statement)
-            .fetch_all(&pool)
-            .await
-            .map_err(|error| format_database_error(&error.to_string()))?;
+        // Stream rows instead of loading the full result into memory. Read one extra
+        // row to distinguish a complete result from one truncated at the UI limit.
+        let mut stream = sqlx::query(statement).fetch(&pool);
+        let mut fetched = Vec::with_capacity(DEFAULT_QUERY_ROW_LIMIT.min(256));
+        let mut truncated = false;
+        while let Some(row) = stream.next().await {
+            let row = row.map_err(|error| format_database_error(&error.to_string()))?;
+            if fetched.len() == DEFAULT_QUERY_ROW_LIMIT {
+                truncated = true;
+                break;
+            }
+            fetched.push(row);
+        }
+        drop(stream);
 
         let columns = fetched
             .first()
@@ -200,12 +214,21 @@ async fn execute_query(
             .collect::<Vec<Vec<Value>>>();
 
         let row_count = rows.len() as u64;
+        let message = if truncated {
+            format!(
+                "Query completed · showing first {row_count} row(s); result truncated at {DEFAULT_QUERY_ROW_LIMIT}"
+            )
+        } else {
+            format!("Query completed · {row_count} row(s) returned")
+        };
         Ok(QueryExecutionResult {
             columns,
             rows,
             rows_affected: row_count,
             duration_ms: started.elapsed().as_millis(),
-            message: format!("Query completed · {row_count} row(s) returned"),
+            truncated,
+            row_limit: DEFAULT_QUERY_ROW_LIMIT,
+            message,
         })
     } else {
         let result = sqlx::query(statement)
@@ -219,6 +242,8 @@ async fn execute_query(
             rows: Vec::new(),
             rows_affected,
             duration_ms: started.elapsed().as_millis(),
+            truncated: false,
+            row_limit: DEFAULT_QUERY_ROW_LIMIT,
             message: format!("Statement completed · {rows_affected} row(s) affected"),
         })
     }
