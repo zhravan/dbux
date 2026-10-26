@@ -14,7 +14,7 @@ DBUX is built around a simple idea: database work should feel fast, predictable,
 
 ## Project status
 
-Early development. The current implementation supports connecting to PostgreSQL, executing SQL from the desktop UI, and displaying query results with a bounded streaming limit of 1,000 rows per query. When a result exceeds that limit, DBUX marks it as truncated instead of silently presenting a partial result as complete. SQLite support, secure OS credential storage, query cancellation, schema browsing, editable rows, and additional drivers are not implemented yet.
+Early development. The current implementation supports connecting to PostgreSQL, executing SQL from the desktop UI, and displaying query results with a bounded streaming limit of 1,000 rows per query. Truncated results are marked explicitly; supported PostgreSQL decoding errors are surfaced instead of being misreported as SQL NULL, and BIGINT values remain exact in the UI. SQLite support, secure OS credential storage, query cancellation, schema browsing, editable rows, and additional drivers are not implemented yet.
 
 See [the implementation checklist](docs/IMPLEMENTATION_CHECKLIST.md) for the phased roadmap and acceptance criteria.
 
