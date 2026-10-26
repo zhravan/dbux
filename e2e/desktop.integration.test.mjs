@@ -348,18 +348,17 @@ test(
         10_000,
         "CSV export did not produce a downloadable file payload",
       );
-      const exportedCsv = new TextDecoder("utf-8").decode(new Uint8Array(exportedBytes));
       assert.deepEqual(
         exportedBytes.slice(0, 3),
         [0xef, 0xbb, 0xbf],
         "CSV downloads should begin with the UTF-8 BOM bytes",
       );
-      const csv = exportedCsv.replace(/^\\uFEFF/, "");
+      const csv = new TextDecoder("utf-8").decode(new Uint8Array(exportedBytes.slice(3)));
       assert.ok(
-        csv.startsWith('"plain","comma_value","quoted_value","multiline_value","spreadsheet_formula","null_value","empty_text"\\r\\n'),
-        "CSV should include all result column headers in order",
+        csv.startsWith('"plain","comma_value","quoted_value","multiline_value","spreadsheet_formula","null_value","empty_text"\r\n'),
+        `CSV should include all result column headers in order: ${JSON.stringify(csv.slice(0, 250))}`,
       );
-      const expectedRow = `"plain","with,comma","say ""hi""","line1\\nline2","'=1+1","",""\\r\\n`;
+      const expectedRow = `"plain","with,comma","say ""hi""","line1\nline2","'=1+1","",""\r\n`;
       assert.ok(csv.includes(expectedRow), `CSV row should correctly escape commas, quotes, newlines, and formula-like text: ${JSON.stringify(csv)}`);
       await captureScreenshot("08-csv-export.png");
 
