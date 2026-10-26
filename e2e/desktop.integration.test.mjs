@@ -238,7 +238,7 @@ test(
         async () => {
           const status = ((await readDom('[data-testid="query-status"]')) ?? "").trim();
           const editorValue = await readDom('[data-testid="sql-editor"]', "value");
-          const previewLabel = await readDom('[data-testid="result-cell-0-1"]);
+          const previewLabel = await readDom('[data-testid="result-cell-0-1"]');
           return status.includes("Query completed") &&
             editorValue === 'SELECT * FROM "public"."dbux_e2e_items" LIMIT 1001;' &&
             previewLabel === insertedLabel;
