@@ -203,19 +203,8 @@ test(
       assert.equal(selectedCell, insertedLabel);
       await captureScreenshot("03-select-readback.png");
 
-      await executeSql(
-        `SELECT
-          NULL::TEXT AS actual_null,
-          ''::TEXT AS empty_text,
-          9223372036854775807::BIGINT AS big_integer,
-          12345678901234567890.123456789::NUMERIC AS exact_decimal,
-          '{"pet":"dog","count":2}'::JSONB AS document,
-          '2026-10-26 12:34:56'::TIMESTAMP AS local_timestamp,
-          '2026-10-26 12:34:56+00'::TIMESTAMPTZ AS utc_timestamp,
-          '550e8400-e29b-41d4-a716-446655440000'::UUID AS identifier,
-          decode('00ff10', 'hex')::BYTEA AS payload`,
-        "Query completed",
-      );
+      const typedValuesSql = `SELECT NULL::TEXT AS actual_null, ''::TEXT AS empty_text, 9223372036854775807::BIGINT AS big_integer, 12345678901234567890.123456789::NUMERIC AS exact_decimal, '{"pet":"dog","count":2}'::JSONB AS document, '2026-10-26 12:34:56'::TIMESTAMP AS local_timestamp, '2026-10-26 12:34:56+00'::TIMESTAMPTZ AS utc_timestamp, '550e8400-e29b-41d4-a716-446655440000'::UUID AS identifier, decode('00ff10', 'hex')::BYTEA AS payload`;
+      await executeSql(typedValuesSql, "Query completed");
 
       assert.equal(await readDom('[data-testid="result-cell-0-0"]'), "NULL");
       assert.equal(await readDom('[data-testid="result-cell-0-0"]', "className"), "null-cell");
