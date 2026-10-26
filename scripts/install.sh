@@ -4,7 +4,13 @@ set -eu
 REPO="zhravan/dbux"
 API="https://api.github.com/repos/${REPO}/releases/latest"
 TMP_DIR="$(mktemp -d)"
-cleanup() { rm -rf "$TMP_DIR"; }
+MOUNT=""
+cleanup() {
+  if [ -n "$MOUNT" ] && command -v hdiutil >/dev/null 2>&1; then
+    hdiutil detach "$MOUNT" -quiet >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMP_DIR"
+}
 trap cleanup EXIT INT TERM
 
 fail() { printf 'DBUX installer: %s\n' "$*" >&2; exit 1; }
@@ -66,14 +72,19 @@ LAUNCH
     else fail "Installing the .deb requires sudo; download the AppImage for a user-local install." ; fi
     ;;
   macos:*.dmg)
+    command -v hdiutil >/dev/null 2>&1 || fail "hdiutil is required to mount the DMG."
     hdiutil attach "$TMP_DIR/$FILE_NAME" -nobrowse -quiet
     MOUNT="$(hdiutil info | awk '/\/Volumes\// {print $NF}' | tail -n 1)"
     [ -n "$MOUNT" ] || fail "Could not locate mounted DMG volume."
     APP="$(find "$MOUNT" -maxdepth 2 -name '*.app' -print -quit)"
     [ -n "$APP" ] || fail "No .app bundle found inside DMG."
-    ditto "$APP" "/Applications/DBUX.app" || fail "Could not copy to /Applications; move the app manually from $MOUNT."
+    ditto "$APP" "$HOME/Applications/DBUX.app" || {
+      mkdir -p "$HOME/Applications"
+      ditto "$APP" "$HOME/Applications/DBUX.app"
+    }
     hdiutil detach "$MOUNT" -quiet || true
-    printf 'Installed DBUX to /Applications/DBUX.app\n'
+    MOUNT=""
+    printf 'Installed DBUX to ~/Applications/DBUX.app\n'
     ;;
   *) fail "Unsupported release asset: $FILE_NAME. See https://github.com/$REPO/releases/latest" ;;
 esac
