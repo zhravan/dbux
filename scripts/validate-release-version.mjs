@@ -35,7 +35,7 @@ export function normalizeReleaseTag(tag) {
 
   const semverTag = tag.startsWith('dbux-v') ? tag.slice('dbux-'.length) : tag;
   if (!SEMVER_TAG_PATTERN.test(semverTag)) {
-    throw new Error('Release tag must be vMAJOR.MINOR.PATCH or dbux-vMAJOR.MINOR.PATCH (including valid SemVer prerelease/build metadata). Received: ' + tag);
+    throw new Error('Release tag must be a strict SemVer tag in vMAJOR.MINOR.PATCH or dbux-vMAJOR.MINOR.PATCH form (including valid prerelease/build metadata). Received: ' + tag);
   }
 
   return semverTag;
