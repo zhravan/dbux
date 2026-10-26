@@ -202,6 +202,18 @@ test(
       );
       assert.equal(selectedCell, insertedLabel);
       await captureScreenshot("03-select-readback.png");
+
+      await executeSql("SELECT generate_series(1, 1001) AS n", "result truncated at 1000");
+      const visibleRows = await browser.executeScript(
+        "return document.querySelectorAll('[data-testid=\\\"query-results\\\"] tbody tr').length;",
+      );
+      assert.equal(visibleRows, 1000, "The result grid should render no more than 1,000 rows");
+      assert.match(
+        (await readDom('[data-testid="result-truncation"]')) ?? "",
+        /Showing the first 1,000 rows/,
+        "The UI should explain that results have been truncated",
+      );
+      await captureScreenshot("04-result-limit.png");
     } catch (error) {
       if (browser) {
         try {
