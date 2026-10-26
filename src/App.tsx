@@ -102,7 +102,7 @@ function quoteIdentifier(identifier: string): string {
 
 function csvField(value: CellValue): string {
   let text = value === null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
-  if (typeof value === "string" && /^[=+@\\t\\r\\n]/.test(text)) {
+  if (typeof value === "string" && /^(?:[=+\\-@]|\\t|\\r|\\n)/.test(text)) {
     text = `'${text}`;
   }
   return `"${text.replaceAll('"', '""')}"`;
@@ -111,7 +111,7 @@ function csvField(value: CellValue): string {
 function queryResultCsv(result: QueryResult): string {
   const header = result.columns.map((column) => csvField(column.name)).join(",");
   const rows = result.rows.map((row) => row.map(csvField).join(","));
-  return `\\uFEFF${[header, ...rows].join("\\r\\n")}\\r\\n`;
+  return `\uFEFF${[header, ...rows].join("\r\n")}\r\n`;
 }
 
 export default function App() {

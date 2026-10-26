@@ -346,10 +346,14 @@ test(
         10_000,
         "CSV export did not produce a downloadable file payload",
       );
-      const csv = exportedCsv.replace(/^\\uFEFF/, "");
-      assert.match(csv, /"plain","comma_value","quoted_value","multiline_value","spreadsheet_formula","null_value","empty_text"\\r\\n/);
-      assert.match(csv, /"plain","with,comma","say ""hi""","line1\\nline2","'=1\\+1","",""\\r\\n/);
-      assert.ok(exportedCsv.startsWith("\\uFEFF"), "CSV downloads should include a UTF-8 BOM for spreadsheet compatibility");
+      const csv = exportedCsv.replace(/^\uFEFF/, "");
+      assert.ok(
+        csv.startsWith('"plain","comma_value","quoted_value","multiline_value","spreadsheet_formula","null_value","empty_text"\r\n'),
+        "CSV should include all result column headers in order",
+      );
+      const expectedRow = `"plain","with,comma","say ""hi""","line1\nline2","'=1+1","",""\r\n`;
+      assert.ok(csv.includes(expectedRow), `CSV row should correctly escape commas, quotes, newlines, and formula-like text: ${JSON.stringify(csv)}`);
+      assert.ok(exportedCsv.startsWith("\uFEFF"), "CSV downloads should include a UTF-8 BOM for spreadsheet compatibility");
       await captureScreenshot("08-csv-export.png");
 
       await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
