@@ -305,7 +305,9 @@ fn decode_cell(row: &PgRow, index: usize, type_name: &str) -> Result<Value, Stri
         "NUMERIC" => decode_optional(
             row.try_get::<Option<BigDecimal>, _>(index)
                 .map_err(|error| error.to_string()),
-            |value| Value::String(value.to_string()),
+            // PostgreSQL's numeric binary representation can include trailing
+            // zeros beyond the value's natural scale; omit those display artifacts.
+            |value| Value::String(value.normalized().to_string()),
         ),
         "UUID" => decode_optional(
             row.try_get::<Option<Uuid>, _>(index)
