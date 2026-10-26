@@ -102,7 +102,7 @@ function quoteIdentifier(identifier: string): string {
 
 function csvField(value: CellValue): string {
   let text = value === null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
-  if (typeof value === "string" && /^(?:[=+\\-@]|\\t|\\r|\\n)/.test(text)) {
+  if (typeof value === "string" && ["=", "+", "-", "@", "\\t", "\\r", "\\n"].some((prefix) => text.startsWith(prefix))) {
     text = `'${text}`;
   }
   return `"${text.replaceAll('"', '""')}"`;
