@@ -4,6 +4,41 @@ A focused, database-agnostic desktop workbench for developers.
 
 DBUX is built around a simple idea: database work should feel fast, predictable, and uncluttered. The product prioritizes SQL, schema browsing, query results, keyboard workflows, and reliable local connections.
 
+## Install DBUX
+
+Installers for Linux, macOS, and Windows are published on the [GitHub Releases page](https://github.com/zhravan/dbux/releases/latest).
+
+### One-command install
+
+**Linux / macOS:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zhravan/dbux/main/scripts/install.sh | sh
+```
+
+The script selects a Linux AppImage/.deb or macOS DMG from the latest release. Linux AppImages install under your home directory; a .deb install may ask for sudo.
+
+**Windows PowerShell:**
+
+```powershell
+irm https://raw.githubusercontent.com/zhravan/dbux/main/scripts/install.ps1 | iex
+```
+
+Review the installer script before piping it directly into PowerShell.
+
+Manual installers: [latest release assets](https://github.com/zhravan/dbux/releases/latest).
+
+### Release process
+
+Push a version tag to build and publish platform-specific installer artifacts:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+CI runs on pull requests and pushes to `main`; feature branch pushes do not trigger a duplicate full run. Newer commits cancel superseded checks for the same PR.
+
 ## Product principles
 
 - Developer experience first; restrained UI and useful keyboard shortcuts.
@@ -20,42 +55,25 @@ See [the implementation checklist](docs/IMPLEMENTATION_CHECKLIST.md) for the pha
 
 ## Development
 
-Requirements:
-- Node.js 22+
-- npm
-- Rust stable and Cargo
-- Platform dependencies required by Tauri 2
-
-Install frontend dependencies and run the web shell:
+Requirements: Node.js 22+, npm, Rust stable/Cargo, and Tauri 2 platform dependencies.
 
 ```sh
 npm install
 npm run dev
-```
-
-Type-check and build the frontend:
-
-```sh
 npm run typecheck
 npm run build
-```
-
-Run the desktop application:
-
-```sh
 npm run tauri dev
 ```
 
-Rust checks:
+Rust checks (from `src-tauri`):
 
 ```sh
-cd src-tauri
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all
 ```
 
-Desktop UI + PostgreSQL integration test (Linux CI dependencies, PostgreSQL service, and `tauri-driver` required):
+Desktop UI + PostgreSQL integration tests require the Linux CI dependencies, PostgreSQL service, and `tauri-driver`:
 
 ```sh
 npm run test:e2e
