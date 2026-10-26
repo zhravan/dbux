@@ -26,10 +26,13 @@ jobs:
         include:
           - platform: Linux
             os: ubuntu-22.04
+            asset_pattern: "src-tauri/target/release/bundle/**/*.{deb,AppImage}"
           - platform: macOS
             os: macos-14
+            asset_pattern: "src-tauri/target/release/bundle/**/*.dmg"
           - platform: Windows
             os: windows-2022
+            asset_pattern: "src-tauri/target/release/bundle/**/*.{msi,exe}"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -65,12 +68,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dbux-installers-${{ matrix.platform }}-${{ github.event.inputs.tag || github.ref_name }}
-          path: |
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
+          path: ${{ matrix.asset_pattern }}
           if-no-files-found: error
           retention-days: 7
 
@@ -87,11 +85,15 @@ jobs:
           pattern: dbux-installers-*
           path: release-assets
           merge-multiple: true
+      - name: Verify installer assets exist
+        run: |
+          find release-assets -type f -print
+          test -n "$(find release-assets -type f -print -quit)"
       - name: Create GitHub release and attach installers
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" release-assets/**/* \
+          gh release create "$RELEASE_TAG" release-assets/* \
             --title "DBUX $RELEASE_TAG" \
             --generate-notes
