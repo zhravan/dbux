@@ -385,10 +385,8 @@ mod tests {
         let null_value = decode_optional::<String>(Ok(None), Value::String);
         assert_eq!(null_value.unwrap(), Value::Null);
 
-        let decode_error = decode_optional::<String>(
-            Err("intentional decode failure".to_string()),
-            Value::String,
-        );
+        let decode_error =
+            decode_optional::<String>(Err("intentional decode failure".to_string()), Value::String);
         assert_eq!(
             decode_error.unwrap_err(),
             "intentional decode failure",
