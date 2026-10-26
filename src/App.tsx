@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   Activity,
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   Database,
   FileClock,
@@ -13,12 +14,28 @@ import {
   ShieldCheck,
   TerminalSquare,
   Play,
+  RefreshCw,
   X,
 } from "lucide-react";
 import { useState, type KeyboardEvent } from "react";
 
-type WorkspaceTab = "query" | "history";
+type WorkspaceTab = "query" | "history" | "schema";
 type CellValue = string | number | boolean | null | Record<string, unknown> | unknown[];
+
+interface SchemaColumn {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  defaultValue: string | null;
+  primaryKey: boolean;
+}
+
+interface SchemaObject {
+  schemaName: string;
+  objectName: string;
+  objectType: string;
+  columns: SchemaColumn[];
+}
 
 interface ConnectionSummary {
   id: string;
@@ -75,6 +92,36 @@ export default function App() {
   const [queryError, setQueryError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const [history, setHistory] = useState<{ sql: string; message: string; time: string }[]>([]);
+  const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>([]);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [schemaError, setSchemaError] = useState("");
+  const [expandedSchemas, setExpandedSchemas] = useState<string[]>([]);
+  const [expandedObjects, setExpandedObjects] = useState<string[]>([]);
+
+  const refreshSchema = async () => {
+    if (!connection) {
+      setSchemaObjects([]);
+      setSchemaError("");
+      return;
+    }
+
+    setSchemaLoading(true);
+    setSchemaError("");
+    try {
+      const objects = await invoke<SchemaObject[]>("list_schema_objects", {
+        connectionId: connection.id,
+      });
+      setSchemaObjects(objects);
+      setExpandedSchemas((current) =>
+        current.filter((schemaName) => objects.some((object) => object.schemaName === schemaName)),
+      );
+      setExpandedObjects([]);
+    } catch (error) {
+      setSchemaError(String(error));
+    } finally {
+      setSchemaLoading(false);
+    }
+  };
 
   const updateForm = (field: keyof ConnectionForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -88,6 +135,10 @@ export default function App() {
         config: { ...form, port: Number(form.port) },
       });
       setConnection(connected);
+      setSchemaObjects([]);
+      setSchemaError("");
+      setExpandedSchemas([]);
+      setExpandedObjects([]);
       setShowConnectionForm(false);
       setQueryError("");
       setQueryResult(null);
@@ -104,6 +155,10 @@ export default function App() {
       await invoke("disconnect_database", { connectionId: connection.id });
     } finally {
       setConnection(null);
+      setSchemaObjects([]);
+      setSchemaError("");
+      setExpandedSchemas([]);
+      setExpandedObjects([]);
       setQueryResult(null);
       setQueryError("");
     }
@@ -129,6 +184,11 @@ export default function App() {
     } finally {
       setRunning(false);
     }
+  };
+
+  const openSchemaExplorer = () => {
+    setActiveTab("schema");
+    void refreshSchema();
   };
 
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -182,8 +242,9 @@ export default function App() {
 
           <div className="sidebar-section">
             <div className="sidebar-heading"><span>WORKSPACE</span></div>
-            <button className={`nav-item ${activeTab === "query" ? "selected" : ""}`} onClick={() => setActiveTab("query")}><TerminalSquare size={15} /><span>Query editor</span><kbd>⌘ 1</kbd></button>
+            <button className={`nav-item ${activeTab === "query" ? "selected" : ""}`} data-testid="query-editor-nav" onClick={() => setActiveTab("query")}><TerminalSquare size={15} /><span>Query editor</span><kbd>⌘ 1</kbd></button>
             <button className={`nav-item ${activeTab === "history" ? "selected" : ""}`} onClick={() => setActiveTab("history")}><FileClock size={15} /><span>Query history</span></button>
+            <button className={`nav-item ${activeTab === "schema" ? "selected" : ""}`} data-testid="schema-explorer-nav" onClick={openSchemaExplorer}><Database size={15} /><span>Schema explorer</span></button>
             <button className="nav-item" onClick={() => setSql("SELECT current_database();")}><FolderOpen size={15} /><span>Saved queries</span></button>
           </div>
 
@@ -198,7 +259,7 @@ export default function App() {
           <div className="workspace-toolbar">
             <div className="breadcrumbs">
               <span>Workspace</span><span className="crumb-separator">/</span>
-              <strong>{activeTab === "query" ? "Query editor" : "Query history"}</strong>
+              <strong>{activeTab === "query" ? "Query editor" : activeTab === "history" ? "Query history" : "Schema explorer"}</strong>
             </div>
             <div className="toolbar-actions">
               <button className="secondary-button" onClick={() => setShowConnectionForm(true)}><Plus size={14} /> New connection</button>
@@ -269,7 +330,7 @@ export default function App() {
                 )}
               </div>
             </div>
-          ) : (
+          ) : activeTab === "history" ? (
             <div className="history-view">
               {history.length ? history.map((item, index) => (
                 <button className="history-item" key={index} onClick={() => { setSql(item.sql); setActiveTab("query"); }}>
@@ -281,6 +342,108 @@ export default function App() {
                   <strong>No query history</strong>
                   <span>Executed queries will be available in this session.</span>
                   <button className="secondary-button" onClick={() => setActiveTab("query")}>Open query editor</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="schema-view" data-testid="schema-explorer">
+              <div className="schema-toolbar">
+                <div>
+                  <h2>Schema explorer</h2>
+                  <p>{connection ? `Objects in ${connection.database}. Refresh to load current metadata.` : "Connect to PostgreSQL to browse tables, views, and columns."}</p>
+                </div>
+                <button className="secondary-button" data-testid="refresh-schema" disabled={!connection || schemaLoading} onClick={() => void refreshSchema()}>
+                  <RefreshCw size={13} /> {schemaLoading ? "Refreshing…" : "Refresh"}
+                </button>
+              </div>
+
+              {!connection ? (
+                <div className="schema-empty">
+                  <div className="results-empty-icon"><Database size={18} /></div>
+                  <strong>No active connection</strong>
+                  <span>Connect to a PostgreSQL database to inspect its schema.</span>
+                </div>
+              ) : schemaError ? (
+                <div className="schema-message schema-error" role="alert" data-testid="schema-error">
+                  <strong>Could not load schema metadata</strong>
+                  <span>{schemaError}</span>
+                  <button className="secondary-button" onClick={() => void refreshSchema()}>Try again</button>
+                </div>
+              ) : schemaLoading ? (
+                <div className="schema-message" role="status" data-testid="schema-loading">Loading schema metadata…</div>
+              ) : schemaObjects.length === 0 ? (
+                <div className="schema-empty" data-testid="schema-empty">
+                  <div className="results-empty-icon"><Database size={18} /></div>
+                  <strong>No visible tables or views</strong>
+                  <span>Check database privileges or create a table, then refresh.</span>
+                </div>
+              ) : (
+                <div className="schema-tree">
+                  {Array.from(new Set(schemaObjects.map((object) => object.schemaName))).map((schemaName) => {
+                    const objects = schemaObjects.filter((object) => object.schemaName === schemaName);
+                    const schemaExpanded = expandedSchemas.includes(schemaName);
+                    return (
+                      <section className="schema-group" key={schemaName}>
+                        <button
+                          className="schema-node schema-node-schema"
+                          data-testid={`schema-toggle-${schemaName}`}
+                          aria-expanded={schemaExpanded}
+                          onClick={() => setExpandedSchemas((current) =>
+                            current.includes(schemaName)
+                              ? current.filter((name) => name !== schemaName)
+                              : [...current, schemaName],
+                          )}
+                        >
+                          {schemaExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          <span className="schema-node-name">{schemaName}</span>
+                          <small>{objects.length} {objects.length === 1 ? "object" : "objects"}</small>
+                        </button>
+                        {schemaExpanded && (
+                          <div className="schema-object-list">
+                            {objects.map((object) => {
+                              const objectKey = `${object.schemaName}.${object.objectName}`;
+                              const objectExpanded = expandedObjects.includes(objectKey);
+                              return (
+                                <div className="schema-object" key={objectKey}>
+                                  <button
+                                    className="schema-node schema-node-object"
+                                    data-testid={`schema-object-${object.schemaName}-${object.objectName}`}
+                                    aria-expanded={objectExpanded}
+                                    onClick={() => setExpandedObjects((current) =>
+                                      current.includes(objectKey)
+                                        ? current.filter((key) => key !== objectKey)
+                                        : [...current, objectKey],
+                                    )}
+                                  >
+                                    {objectExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                    <span className="schema-node-name">{object.objectName}</span>
+                                    <small>{object.objectType}</small>
+                                    <span className="schema-column-count">{object.columns.length} cols</span>
+                                  </button>
+                                  {objectExpanded && (
+                                    <div className="schema-columns">
+                                      <div className="schema-columns-header"><span>Column</span><span>Type</span><span>Rules</span></div>
+                                      {object.columns.map((column) => (
+                                        <div className="schema-column" key={column.name} data-testid={`schema-column-${object.schemaName}-${object.objectName}-${column.name}`}>
+                                          <span className="schema-column-name">{column.name}</span>
+                                          <span className="schema-column-type">{column.dataType}</span>
+                                          <span className="schema-column-rules">
+                                            {column.primaryKey && <span className="schema-tag schema-tag-key">PK</span>}
+                                            <span className={column.nullable ? "schema-nullable" : "schema-not-null"}>{column.nullable ? "NULL" : "NOT NULL"}</span>
+                                            {column.defaultValue && <code title={column.defaultValue}>{column.defaultValue}</code>}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
                 </div>
               )}
             </div>
