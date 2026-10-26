@@ -325,6 +325,44 @@ test(
       );
       await captureScreenshot("07-result-limit.png");
 
+      await executeSql(
+        `SELECT 'plain'::TEXT AS plain, 'with,comma'::TEXT AS comma_value, 'say "hi"'::TEXT AS quoted_value, E'line1\\nline2'::TEXT AS multiline_value, '=1+1'::TEXT AS spreadsheet_formula, NULL::TEXT AS null_value, ''::TEXT AS empty_text`,
+        "Query completed",
+      );
+      await browser.executeScript(`
+        window.__dbuxOriginalCreateObjectURL = URL.createObjectURL.bind(URL);
+        window.__dbuxCsvExportBytes = null;
+        URL.createObjectURL = (blob) => {
+          blob.arrayBuffer().then((buffer) => {
+            window.__dbuxCsvExportBytes = Array.from(new Uint8Array(buffer));
+          });
+          return window.__dbuxOriginalCreateObjectURL(blob);
+        };
+      `);
+      await click('[data-testid="export-results-csv"]');
+      const exportedBytes = await browser.wait(
+        async () => {
+          const value = await browser.executeScript("return window.__dbuxCsvExportBytes;");
+          return Array.isArray(value) ? value : false;
+        },
+        10_000,
+        "CSV export did not produce a downloadable file payload",
+      );
+      const exportedCsv = new TextDecoder("utf-8").decode(new Uint8Array(exportedBytes));
+      assert.deepEqual(
+        exportedBytes.slice(0, 3),
+        [0xef, 0xbb, 0xbf],
+        "CSV downloads should begin with the UTF-8 BOM bytes",
+      );
+      const csv = exportedCsv.replace(/^\\uFEFF/, "");
+      assert.ok(
+        csv.startsWith('"plain","comma_value","quoted_value","multiline_value","spreadsheet_formula","null_value","empty_text"\\r\\n'),
+        "CSV should include all result column headers in order",
+      );
+      const expectedRow = `"plain","with,comma","say ""hi""","line1\\nline2","'=1+1","",""\\r\\n`;
+      assert.ok(csv.includes(expectedRow), `CSV row should correctly escape commas, quotes, newlines, and formula-like text: ${JSON.stringify(csv)}`);
+      await captureScreenshot("08-csv-export.png");
+
       await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
       assert.equal(
         await readDom('[data-testid="result-cell-0-0"]'),
