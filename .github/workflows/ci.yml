@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build
 
@@ -103,7 +103,7 @@ jobs:
             librsvg2-dev \
             libayatana-appindicator3-dev \
             patchelf
-      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-audit --no-fund
       - name: Build desktop application
         run: npm run tauri build -- --no-bundle
       - name: Install tauri-driver
