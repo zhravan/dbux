@@ -35,6 +35,7 @@ jobs:
         with:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
+          bootstrap-sha: a596efde79e3781a4098f01f0584041ba0dbd93c
 
   validate-version:
     name: Validate SemVer and synchronized app versions
