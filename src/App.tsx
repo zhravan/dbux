@@ -242,7 +242,7 @@ export default function App() {
 
           <div className="sidebar-section">
             <div className="sidebar-heading"><span>WORKSPACE</span></div>
-            <button className={`nav-item ${activeTab === "query" ? "selected" : ""}`} onClick={() => setActiveTab("query")}><TerminalSquare size={15} /><span>Query editor</span><kbd>⌘ 1</kbd></button>
+            <button className={`nav-item ${activeTab === "query" ? "selected" : ""}`} data-testid="query-editor-nav" onClick={() => setActiveTab("query")}><TerminalSquare size={15} /><span>Query editor</span><kbd>⌘ 1</kbd></button>
             <button className={`nav-item ${activeTab === "history" ? "selected" : ""}`} onClick={() => setActiveTab("history")}><FileClock size={15} /><span>Query history</span></button>
             <button className={`nav-item ${activeTab === "schema" ? "selected" : ""}`} data-testid="schema-explorer-nav" onClick={openSchemaExplorer}><Database size={15} /><span>Schema explorer</span></button>
             <button className="nav-item" onClick={() => setSql("SELECT current_database();")}><FolderOpen size={15} /><span>Saved queries</span></button>
