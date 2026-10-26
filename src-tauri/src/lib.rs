@@ -256,11 +256,9 @@ async fn list_schema_objects(
                 .map_err(|error| format_database_error(&error.to_string()))?,
         };
 
-        let object_is_current = objects
-            .last()
-            .is_some_and(|object| {
-                object.schema_name == schema_name && object.object_name == object_name
-            });
+        let object_is_current = objects.last().is_some_and(|object| {
+            object.schema_name == schema_name && object.object_name == object_name
+        });
         if !object_is_current {
             objects.push(SchemaObjectInfo {
                 schema_name,
