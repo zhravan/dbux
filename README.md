@@ -44,7 +44,7 @@ When releasable commits land on `main`, Release Please opens or updates a releas
 
 The release workflow builds Linux x64 (`.AppImage`, `.deb`, `.rpm`), macOS Apple Silicon and Intel (`.dmg`), and Windows x64 (`.msi`, `.exe`). It verifies that each installer format exists, uploads the artifacts, and only then publishes the release and marks it **Latest**. If a build fails, the release remains a draft so the same tag can be retried from **Actions → Release desktop installers** using `workflow_dispatch` and the tag, such as `v0.2.0`.
 
-Do not create or move release tags by hand. Keep PR titles/squash commits Conventional Commit-compliant so the automated version bump is predictable. A repository administrator must allow GitHub Actions to create pull requests in **Settings → Actions → General** for Release Please to maintain the release PR.
+Do not create or move release tags by hand. Keep PR titles/squash commits Conventional Commit-compliant so the automated version bump is predictable. Configure a `RELEASE_PLEASE_TOKEN` repository secret with `contents`, `pull_requests`, and `issues` write access so Release Please can create and update the release PR even when `GITHUB_TOKEN` PR creation is restricted by repository settings.
 
 CI runs on pull requests and pushes to `main`; feature branch pushes do not trigger a duplicate full run. Newer commits cancel superseded checks for the same PR.
 
