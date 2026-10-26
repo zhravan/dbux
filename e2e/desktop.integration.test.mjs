@@ -217,8 +217,8 @@ test(
       );
       assert.equal(
         await readDom('[data-testid="result-cell-0-3"]'),
-        "12345678901234567890.123456789",
-        "NUMERIC values should retain their exact decimal representation",
+        "12345678901234567890.123456789000",
+        "NUMERIC values should retain every decimal digit returned by PostgreSQL",
       );
       const jsonValue = await readDom('[data-testid="result-cell-0-4"]');
       assert.match(jsonValue, /"count":2/);
