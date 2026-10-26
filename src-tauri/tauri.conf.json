@@ -28,6 +28,9 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "A focused database workbench for developers",
-    "longDescription": "DBUX is a local-first desktop database workbench."
+    "longDescription": "DBUX is a local-first desktop database workbench.",
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

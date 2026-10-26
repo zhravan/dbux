@@ -16,7 +16,7 @@ Installers for Linux, macOS, and Windows are published on the [GitHub Releases p
 curl -fsSL https://raw.githubusercontent.com/zhravan/dbux/main/scripts/install.sh | sh
 ```
 
-The script selects a Linux AppImage/.deb or macOS DMG from the latest release. Linux AppImages install under your home directory; a .deb install may ask for sudo.
+The script selects a Linux `.deb`, `.rpm`, or AppImage based on the local package manager and CPU architecture. Debian/Ubuntu packages may ask for `sudo`; AppImages install under your home directory. macOS installers cover Apple Silicon and Intel Macs and install to `~/Applications`.
 
 **Windows PowerShell:**
 
@@ -26,11 +26,11 @@ irm https://raw.githubusercontent.com/zhravan/dbux/main/scripts/install.ps1 | ie
 
 Review the installer script before piping it directly into PowerShell.
 
-Manual installers: [latest release assets](https://github.com/zhravan/dbux/releases/latest).
+Manual installers: [latest release assets](https://github.com/zhravan/dbux/releases/latest). Mac builds use an ad-hoc signature but are not notarized; Windows builds are not code-signed yet, so the operating system may show a security/publisher warning.
 
 ### Release process
 
-Push a version tag to build and publish platform-specific installer artifacts:
+Pull requests now build installers on Linux x64, macOS Apple Silicon, macOS Intel, and Windows x64. Pushing a version tag creates the published release only after every platform build succeeds:
 
 ```sh
 git tag v0.1.0
