@@ -80,6 +80,10 @@ function displayCell(value: CellValue): string {
   return String(value);
 }
 
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("query");
   const [showConnectionForm, setShowConnectionForm] = useState(false);
@@ -164,18 +168,20 @@ export default function App() {
     }
   };
 
-  const runQuery = async () => {
-    if (!connection || !sql.trim() || running) return;
+  const runQuery = async (statement = sql) => {
+    if (!connection || !statement.trim() || running) return;
+    setSql(statement);
+    setActiveTab("query");
     setRunning(true);
     setQueryError("");
     try {
       const result = await invoke<QueryResult>("execute_query", {
         connectionId: connection.id,
-        sql,
+        sql: statement,
       });
       setQueryResult(result);
       setHistory((items) => [
-        { sql, message: result.message, time: new Date().toLocaleTimeString() },
+        { sql: statement, message: result.message, time: new Date().toLocaleTimeString() },
         ...items,
       ]);
     } catch (error) {
@@ -189,6 +195,11 @@ export default function App() {
   const openSchemaExplorer = () => {
     setActiveTab("schema");
     void refreshSchema();
+  };
+
+  const previewTable = (schemaName: string, tableName: string) => {
+    const statement = `SELECT * FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)} LIMIT 1001;`;
+    void runQuery(statement);
   };
 
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -422,6 +433,19 @@ export default function App() {
                                   </button>
                                   {objectExpanded && (
                                     <div className="schema-columns">
+                                      {object.objectType === "Table" && (
+                                        <div className="schema-preview-toolbar">
+                                          <span>Read-only preview · first 1,000 rows maximum</span>
+                                          <button
+                                            className="secondary-button schema-preview-button"
+                                            data-testid={`preview-table-${object.schemaName}-${object.objectName}`}
+                                            disabled={running}
+                                            onClick={() => previewTable(object.schemaName, object.objectName)}
+                                          >
+                                            <Play size={11} /> Preview rows
+                                          </button>
+                                        </div>
+                                      )}
                                       <div className="schema-columns-header"><span>Column</span><span>Type</span><span>Rules</span></div>
                                       {object.columns.map((column) => (
                                         <div className="schema-column" key={column.name} data-testid={`schema-column-${object.schemaName}-${object.objectName}-${column.name}`}>

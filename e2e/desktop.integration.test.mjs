@@ -233,7 +233,30 @@ test(
       assert.match(labelColumn, /label.*text/i);
       assert.match(labelColumn, /NOT NULL/);
       await captureScreenshot("04-schema-explorer.png");
-      await click('[data-testid="query-editor-nav"]');
+      await click('[data-testid="preview-table-public-dbux_e2e_items"]');
+      await browser.wait(
+        async () => {
+          const status = ((await readDom('[data-testid="query-status"]')) ?? "").trim();
+          const editorValue = await readDom('[data-testid="sql-editor"]', "value");
+          const previewLabel = await readDom('[data-testid="result-cell-0-1"]');
+          return status.includes("Query completed") &&
+            editorValue === 'SELECT * FROM "public"."dbux_e2e_items" LIMIT 1001;' &&
+            previewLabel === insertedLabel;
+        },
+        15_000,
+        "Table preview did not load the inserted row in the query results",
+      );
+      assert.equal(
+        await readDom('[data-testid="result-cell-0-1"]'),
+        insertedLabel,
+        "Table preview should read the real PostgreSQL row",
+      );
+      assert.match(
+        await readDom('[data-testid="sql-editor"]', "value"),
+        /LIMIT 1001;/,
+        "Table preview must use a fixed server-side LIMIT above the 1,000-row display cap",
+      );
+      await captureScreenshot("05-table-preview.png");
 
       const typedValuesSql = `SELECT NULL::TEXT AS actual_null, ''::TEXT AS empty_text, 9223372036854775807::BIGINT AS big_integer, 12345678901234567890.123456789::NUMERIC AS exact_decimal, '{"pet":"dog","count":2}'::JSONB AS document, '2026-10-26 12:34:56'::TIMESTAMP AS local_timestamp, '2026-10-26 12:34:56+00'::TIMESTAMPTZ AS utc_timestamp, '550e8400-e29b-41d4-a716-446655440000'::UUID AS identifier, decode('00ff10', 'hex')::BYTEA AS payload`;
       await executeSql(typedValuesSql, "Query completed");
@@ -262,7 +285,7 @@ test(
         "550e8400-e29b-41d4-a716-446655440000",
       );
       assert.equal(await readDom('[data-testid="result-cell-0-8"]'), "00ff10");
-      await captureScreenshot("05-type-fidelity.png");
+      await captureScreenshot("06-type-fidelity.png");
 
       await executeSql("SELECT generate_series(1, 1001) AS n", "result truncated at 1000");
       const visibleRows = await browser.executeScript(
@@ -275,7 +298,7 @@ test(
         /Showing the first 1000 rows/,
         "The UI should explain that results have been truncated",
       );
-      await captureScreenshot("06-result-limit.png");
+      await captureScreenshot("07-result-limit.png");
 
       await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
       assert.equal(
