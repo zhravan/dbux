@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Strict SemVer with the repository's standard v prefix.
+// Release Please uses the component-prefixed tag dbux-vX.Y.Z; also accept vX.Y.Z for manual retries.
 export const SEMVER_TAG_PATTERN = /^v(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:[.](?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:[+]([0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*))?$/;
 
 export function getCurrentVersions(rootDir = process.cwd()) {
@@ -28,12 +28,22 @@ export function getCurrentVersions(rootDir = process.cwd()) {
   };
 }
 
-export function validateReleaseVersion(tag, versions) {
-  if (typeof tag !== 'string' || !SEMVER_TAG_PATTERN.test(tag)) {
-    throw new Error('Release tag must be a strict SemVer version with a v prefix (for example v1.2.3). Received: ' + String(tag));
+export function normalizeReleaseTag(tag) {
+  if (typeof tag !== 'string') {
+    throw new Error('Release tag must be a string.');
   }
 
-  const tagVersion = tag.slice(1);
+  const semverTag = tag.startsWith('dbux-v') ? tag.slice('dbux-'.length) : tag;
+  if (!SEMVER_TAG_PATTERN.test(semverTag)) {
+    throw new Error('Release tag must be vMAJOR.MINOR.PATCH or dbux-vMAJOR.MINOR.PATCH (including valid SemVer prerelease/build metadata). Received: ' + tag);
+  }
+
+  return semverTag;
+}
+
+export function validateReleaseVersion(tag, versions) {
+  const semverTag = normalizeReleaseTag(tag);
+  const tagVersion = semverTag.slice(1);
   for (const [file, version] of Object.entries(versions)) {
     if (typeof version !== 'string' || version !== tagVersion) {
       throw new Error(file + ' version is "' + String(version ?? 'missing') + '"; expected ' + tagVersion + ' to match ' + tag + '.');
@@ -47,7 +57,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   try {
     const tag = process.argv[2];
     if (!tag) {
-      throw new Error('Usage: node scripts/validate-release-version.mjs vMAJOR.MINOR.PATCH');
+      throw new Error('Usage: node scripts/validate-release-version.mjs dbux-vMAJOR.MINOR.PATCH');
     }
     validateReleaseVersion(tag, getCurrentVersions());
     console.log('Validated ' + tag + '; package.json, Tauri, and Cargo versions are synchronized.');
