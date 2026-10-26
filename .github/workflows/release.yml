@@ -18,20 +18,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-version:
+    name: Validate release version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require tag to match app version
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          expected="v$version"
+          if [ "$RELEASE_TAG" != "$expected" ]; then
+            echo "Tag $RELEASE_TAG does not match app version $expected." >&2
+            exit 1
+          fi
   build:
     name: Build ${{ matrix.platform }} installer
+    needs: validate-version
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: Linux
-            os: ubuntu-22.04
-            asset_pattern: "src-tauri/target/release/bundle/**/*.{deb,AppImage}"
-          - platform: macOS
-            os: macos-14
+          - platform: Linux x64
+            os: ubuntu-24.04
+            asset_pattern: "src-tauri/target/release/bundle/**/*.{deb,rpm,AppImage}"
+          - platform: macOS Apple Silicon
+            os: macos-latest
             asset_pattern: "src-tauri/target/release/bundle/**/*.dmg"
-          - platform: Windows
-            os: windows-2022
+          - platform: macOS Intel
+            os: macos-15-intel
+            asset_pattern: "src-tauri/target/release/bundle/**/*.dmg"
+          - platform: Windows x64
+            os: windows-latest
             asset_pattern: "src-tauri/target/release/bundle/**/*.{msi,exe}"
     runs-on: ${{ matrix.os }}
     steps:
@@ -56,11 +80,14 @@ jobs:
             libssl-dev \
             librsvg2-dev \
             libayatana-appindicator3-dev \
-            patchelf
+            patchelf \
+            rpm
       - name: Install WiX Toolset
         if: runner.os == 'Windows'
         run: choco install wixtoolset -y --no-progress
       - run: npm install --no-audit --no-fund
+      - name: Generate platform icons
+        run: npm run tauri -- icon src-tauri/icons/icon-source.png --output src-tauri/icons
       - name: Build installer bundles
         run: npm run tauri build
       - name: Upload native installers
@@ -93,6 +120,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" release-assets/* \
-            --title "DBUX $RELEASE_TAG" \
-            --generate-notes
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --title "DBUX $RELEASE_TAG" \
+              --generate-notes
+          fi

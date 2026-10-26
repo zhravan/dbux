@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2="0.86" y2="1">
+      <stop offset="0" stop-color="#f8b9f6"/>
+      <stop offset="0.28" stop-color="#f781c8"/>
+      <stop offset="0.58" stop-color="#ff8ca7"/>
+      <stop offset="0.82" stop-color="#ffd0a2"/>
+      <stop offset="1" stop-color="#ffb58e"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0.82">
+      <stop offset="0" stop-color="#ffd7fb"/>
+      <stop offset="0.3" stop-color="#ffaddb"/>
+      <stop offset="0.68" stop-color="#ff6da9"/>
+      <stop offset="1" stop-color="#ff987b"/>
+    </linearGradient>
+    <linearGradient id="bandLower" x1="0" y1="0" x2="0.92" y2="1">
+      <stop offset="0" stop-color="#ffc5ee"/>
+      <stop offset="0.44" stop-color="#ff8ab5"/>
+      <stop offset="0.8" stop-color="#ff718f"/>
+      <stop offset="1" stop-color="#ffab8a"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".8"/>
+      <stop offset=".55" stop-color="#ffffff" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#fff1fd" stop-opacity=".35"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#frame)" d="M158 192C158 105 228 54 322 54H592C789 54 916 168 916 365V682C916 856 798 956 624 956H202C158 956 132 927 132 884V787C132 759 150 751 173 768C228 808 337 831 470 831C617 831 706 791 706 684V426C706 338 658 293 568 293H232C180 293 145 267 145 226C145 211 149 201 158 192Z"/>
+  <path fill="url(#band)" d="M184 354C242 408 344 431 440 431C542 431 633 407 680 354V448C680 509 577 545 438 545C300 545 190 510 190 450V376C190 366 188 359 184 354Z"/>
+  <path fill="url(#bandLower)" d="M184 575C242 630 344 653 440 653C542 653 633 629 680 575V668C680 730 577 765 438 765C300 765 190 730 190 670V598C190 587 188 581 184 575Z"/>
+  <path d="M174 192C174 117 236 72 322 72H592C779 72 896 179 896 365V682C896 843 786 938 624 938H206" fill="none" stroke="url(#shine)" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+  <path d="M201 360C258 407 350 421 440 421C532 421 613 402 668 362" fill="none" stroke="url(#shine)" stroke-width="6" stroke-linecap="round" opacity=".9"/>
+  <path d="M201 581C258 628 350 643 440 643C532 643 613 623 668 583" fill="none" stroke="url(#shine)" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+</svg>
