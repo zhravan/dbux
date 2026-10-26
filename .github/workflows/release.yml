@@ -33,6 +33,7 @@ jobs:
         if: github.event_name == 'push'
         uses: release-please-oss/release-please-action@v5
         with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN != '' && secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
           bootstrap-sha: a596efde79e3781a4098f01f0584041ba0dbd93c
