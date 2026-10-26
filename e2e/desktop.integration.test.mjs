@@ -203,6 +203,46 @@ test(
       assert.equal(selectedCell, insertedLabel);
       await captureScreenshot("03-select-readback.png");
 
+      await executeSql(
+        `SELECT
+          NULL::TEXT AS actual_null,
+          ''::TEXT AS empty_text,
+          9223372036854775807::BIGINT AS big_integer,
+          12345678901234567890.123456789::NUMERIC AS exact_decimal,
+          '{"pet":"dog","count":2}'::JSONB AS document,
+          '2026-10-26 12:34:56'::TIMESTAMP AS local_timestamp,
+          '2026-10-26 12:34:56+00'::TIMESTAMPTZ AS utc_timestamp,
+          '550e8400-e29b-41d4-a716-446655440000'::UUID AS identifier,
+          decode('00ff10', 'hex')::BYTEA AS payload`,
+        "Query completed",
+      );
+
+      assert.equal(await readDom('[data-testid="result-cell-0-0"]'), "NULL");
+      assert.equal(await readDom('[data-testid="result-cell-0-0"]', "className"), "null-cell");
+      assert.equal(await readDom('[data-testid="result-cell-0-1"]'), "");
+      assert.notEqual(await readDom('[data-testid="result-cell-0-1"]', "className"), "null-cell");
+      assert.equal(
+        await readDom('[data-testid="result-cell-0-2"]'),
+        "9223372036854775807",
+        "BIGINT values must not lose precision in the JavaScript UI",
+      );
+      assert.equal(
+        await readDom('[data-testid="result-cell-0-3"]'),
+        "12345678901234567890.123456789",
+        "NUMERIC values should retain their exact decimal representation",
+      );
+      const jsonValue = await readDom('[data-testid="result-cell-0-4"]');
+      assert.match(jsonValue, /"count":2/);
+      assert.match(jsonValue, /"pet":"dog"/);
+      assert.equal(await readDom('[data-testid="result-cell-0-5"]'), "2026-10-26 12:34:56");
+      assert.equal(await readDom('[data-testid="result-cell-0-6"]'), "2026-10-26T12:34:56+00:00");
+      assert.equal(
+        await readDom('[data-testid="result-cell-0-7"]'),
+        "550e8400-e29b-41d4-a716-446655440000",
+      );
+      assert.equal(await readDom('[data-testid="result-cell-0-8"]'), "00ff10");
+      await captureScreenshot("04-type-fidelity.png");
+
       await executeSql("SELECT generate_series(1, 1001) AS n", "result truncated at 1000");
       const visibleRows = await browser.executeScript(
         "return document.querySelectorAll('.result-grid tbody tr').length;",
