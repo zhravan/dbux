@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src-tauri/icons/icon-source.png" alt="DBUX logo" width="180" />
+</p>
+
 # DBUX
 
 A focused, database-agnostic desktop workbench for developers.
@@ -28,14 +32,19 @@ Review the installer script before piping it directly into PowerShell.
 
 Manual installers: [latest release assets](https://github.com/zhravan/dbux/releases/latest). Mac builds use an ad-hoc signature but are not notarized; Windows builds are not code-signed yet, so the operating system may show a security/publisher warning.
 
-### Release process
+### Releases and semantic versioning
 
-Pull requests now build installers on Linux x64, macOS Apple Silicon, macOS Intel, and Windows x64. Pushing a version tag creates the published release only after every platform build succeeds:
+Releases use [Conventional Commits](https://www.conventionalcommits.org/) and SemVer. Use these prefixes in PR titles/squash-merge commit messages:
 
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
+- `fix: ...` — patch release (for example, `0.1.0` → `0.1.1`).
+- `feat: ...` — minor release (for example, `0.1.0` → `0.2.0`).
+- `feat!: ...` or a `BREAKING CHANGE:` footer — breaking change; before `1.0.0`, this advances the minor version.
+
+When releasable commits land on `main`, Release Please opens or updates a release PR with the generated changelog and synchronized versions in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `.release-please-manifest.json`. Review and merge that PR to create a `vMAJOR.MINOR.PATCH` tag and a draft GitHub Release with generated release notes.
+
+The release workflow builds Linux x64 (`.AppImage`, `.deb`, `.rpm`), macOS Apple Silicon and Intel (`.dmg`), and Windows x64 (`.msi`, `.exe`). It verifies that each installer format exists, uploads the artifacts, and only then publishes the release and marks it **Latest**. If a build fails, the release remains a draft so the same tag can be retried from **Actions → Release desktop installers** using `workflow_dispatch` and the tag, such as `v0.2.0`.
+
+Do not create or move release tags by hand. Keep PR titles/squash commits Conventional Commit-compliant so the automated version bump is predictable. A repository administrator must allow GitHub Actions to create pull requests in **Settings → Actions → General** for Release Please to maintain the release PR.
 
 CI runs on pull requests and pushes to `main`; feature branch pushes do not trigger a duplicate full run. Newer commits cancel superseded checks for the same PR.
 
