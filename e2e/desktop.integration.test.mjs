@@ -205,7 +205,7 @@ test(
 
       await executeSql("SELECT generate_series(1, 1001) AS n", "result truncated at 1000");
       const visibleRows = await browser.executeScript(
-        "return document.querySelectorAll('[data-testid=\\\"query-results\\\"] tbody tr').length;",
+        "return document.querySelectorAll('.result-grid tbody tr').length;",
       );
       assert.equal(visibleRows, 1000, "The result grid should render no more than 1,000 rows");
       assert.match(
@@ -214,6 +214,13 @@ test(
         "The UI should explain that results have been truncated",
       );
       await captureScreenshot("04-result-limit.png");
+
+      await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
+      assert.equal(
+        await readDom('[data-testid="result-cell-0-0"]'),
+        "1",
+        "The PostgreSQL connection should remain usable after stopping a result stream early",
+      );
     } catch (error) {
       if (browser) {
         try {
