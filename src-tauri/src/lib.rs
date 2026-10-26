@@ -57,6 +57,25 @@ struct ColumnInfo {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct SchemaColumnInfo {
+    name: String,
+    data_type: String,
+    nullable: bool,
+    default_value: Option<String>,
+    primary_key: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SchemaObjectInfo {
+    schema_name: String,
+    object_name: String,
+    object_type: String,
+    columns: Vec<SchemaColumnInfo>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct QueryExecutionResult {
     columns: Vec<ColumnInfo>,
     rows: Vec<Vec<Value>>,
@@ -74,6 +93,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             connect_postgres,
             disconnect_database,
+            list_schema_objects,
             execute_query
         ])
         .run(tauri::generate_context!())
@@ -151,6 +171,110 @@ async fn disconnect_database(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+async fn list_schema_objects(
+    connection_id: String,
+    state: State<'_, DbState>,
+) -> Result<Vec<SchemaObjectInfo>, String> {
+    let pool = state
+        .pools
+        .lock()
+        .map_err(|_| "Connection manager is unavailable.".to_string())?
+        .get(&connection_id)
+        .cloned()
+        .ok_or_else(|| "Database connection is no longer active.".to_string())?;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            c.table_schema,
+            c.table_name,
+            CASE t.table_type
+                WHEN 'BASE TABLE' THEN 'Table'
+                WHEN 'VIEW' THEN 'View'
+                ELSE 'Foreign table'
+            END AS object_type,
+            c.column_name,
+            c.data_type,
+            (c.is_nullable = 'YES') AS nullable,
+            c.column_default AS default_value,
+            EXISTS (
+                SELECT 1
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                  ON kcu.constraint_catalog = tc.constraint_catalog
+                 AND kcu.constraint_schema = tc.constraint_schema
+                 AND kcu.constraint_name = tc.constraint_name
+                 AND kcu.table_schema = tc.table_schema
+                 AND kcu.table_name = tc.table_name
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                  AND kcu.table_schema = c.table_schema
+                  AND kcu.table_name = c.table_name
+                  AND kcu.column_name = c.column_name
+            ) AS primary_key
+        FROM information_schema.columns c
+        JOIN information_schema.tables t
+          ON t.table_schema = c.table_schema
+         AND t.table_name = c.table_name
+        WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
+          AND t.table_type IN ('BASE TABLE', 'VIEW', 'FOREIGN')
+        ORDER BY c.table_schema, c.table_name, c.ordinal_position
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|error| format_database_error(&error.to_string()))?;
+
+    let mut objects: Vec<SchemaObjectInfo> = Vec::new();
+    for row in rows {
+        let schema_name: String = row
+            .try_get("table_schema")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let object_name: String = row
+            .try_get("table_name")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let object_type: String = row
+            .try_get("object_type")
+            .map_err(|error| format_database_error(&error.to_string()))?;
+        let column = SchemaColumnInfo {
+            name: row
+                .try_get("column_name")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            data_type: row
+                .try_get("data_type")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            nullable: row
+                .try_get("nullable")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            default_value: row
+                .try_get("default_value")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+            primary_key: row
+                .try_get("primary_key")
+                .map_err(|error| format_database_error(&error.to_string()))?,
+        };
+
+        let object_is_current = objects
+            .last()
+            .is_some_and(|object| {
+                object.schema_name == schema_name && object.object_name == object_name
+            });
+        if !object_is_current {
+            objects.push(SchemaObjectInfo {
+                schema_name,
+                object_name,
+                object_type,
+                columns: Vec::new(),
+            });
+        }
+        if let Some(object) = objects.last_mut() {
+            object.columns.push(column);
+        }
+    }
+
+    Ok(objects)
 }
 
 #[tauri::command]
