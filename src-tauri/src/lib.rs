@@ -336,9 +336,10 @@ async fn list_schema_objects(
                 .try_get("is_primary")
                 .map_err(|error| format_database_error(&error.to_string()))?,
         };
-        if let Some(object) = objects.iter_mut().find(|object| {
-            object.schema_name == schema_name && object.object_name == object_name
-        }) {
+        if let Some(object) = objects
+            .iter_mut()
+            .find(|object| object.schema_name == schema_name && object.object_name == object_name)
+        {
             object.indexes.push(index);
         }
     }
@@ -389,9 +390,10 @@ async fn list_schema_objects(
                 .try_get("definition")
                 .map_err(|error| format_database_error(&error.to_string()))?,
         };
-        if let Some(object) = objects.iter_mut().find(|object| {
-            object.schema_name == schema_name && object.object_name == object_name
-        }) {
+        if let Some(object) = objects
+            .iter_mut()
+            .find(|object| object.schema_name == schema_name && object.object_name == object_name)
+        {
             object.constraints.push(constraint);
         }
     }
