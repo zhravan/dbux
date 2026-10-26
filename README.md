@@ -39,6 +39,10 @@ git push origin v0.1.0
 
 CI runs on pull requests and pushes to `main`; feature branch pushes do not trigger a duplicate full run. Newer commits cancel superseded checks for the same PR.
 
+## Export query results to CSV
+
+The query result grid includes an **Export CSV** action when a query returns columns. It exports only the result rows currently returned by DBUX (up to its existing 1,000-row cap). Fields are quoted, embedded quotes are escaped, commas and line breaks are preserved, UTF-8 output includes a BOM, and formula-like text fields are prefixed with an apostrophe. SQL NULL and empty text both export as empty CSV fields.
+
 ## Product principles
 
 - Developer experience first; restrained UI and useful keyboard shortcuts.

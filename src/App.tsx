@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleHelp,
   Database,
+  Download,
   FileClock,
   FolderOpen,
   Keyboard,
@@ -97,6 +98,20 @@ function displayCell(value: CellValue): string {
 
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function csvField(value: CellValue): string {
+  let text = value === null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+  if (typeof value === "string" && ["=", "+", "-", "@", "\t", "\r", "\n"].some((prefix) => text.startsWith(prefix))) {
+    text = `'${text}`;
+  }
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function queryResultCsv(result: QueryResult): string {
+  const header = result.columns.map((column) => csvField(column.name)).join(",");
+  const rows = result.rows.map((row) => row.map(csvField).join(","));
+  return `\uFEFF${[header, ...rows].join("\r\n")}\r\n`;
 }
 
 export default function App() {
@@ -217,6 +232,19 @@ export default function App() {
     void runQuery(statement);
   };
 
+  const exportResultsCsv = () => {
+    if (!queryResult || queryResult.columns.length === 0) return;
+    const blob = new Blob([queryResultCsv(queryResult)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `dbux-results-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  };
+
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
@@ -325,7 +353,23 @@ export default function App() {
                 </div>
               </div>
               <div className="results-panel">
-                <div className="results-tabs"><strong>Results</strong><span>Messages</span><div className="results-spacer" /><span className="results-meta" data-testid="query-status">{running ? "Executing…" : queryResult?.message ?? (queryError ? "Query failed" : "No query executed")}</span></div>
+                <div className="results-tabs">
+                  <strong>Results</strong>
+                  <span>Messages</span>
+                  <div className="results-spacer" />
+                  {queryResult && queryResult.columns.length > 0 && (
+                    <button
+                      className="secondary-button export-csv-button"
+                      data-testid="export-results-csv"
+                      disabled={running}
+                      onClick={exportResultsCsv}
+                      title="Export the currently displayed result set to CSV"
+                    >
+                      <Download size={12} /> Export CSV
+                    </button>
+                  )}
+                  <span className="results-meta" data-testid="query-status">{running ? "Executing…" : queryResult?.message ?? (queryError ? "Query failed" : "No query executed")}</span>
+                </div>
                 {queryError ? (
                   <div className="query-error" role="alert" data-testid="query-error"><strong>Query failed</strong><span>{queryError}</span></div>
                 ) : queryResult && queryResult.columns.length > 0 ? (
