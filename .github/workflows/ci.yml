@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, "feat/**", "docs/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -18,7 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run build
 
@@ -81,6 +86,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install desktop and WebDriver dependencies
         run: |
           sudo apt-get update
@@ -97,7 +103,7 @@ jobs:
             librsvg2-dev \
             libayatana-appindicator3-dev \
             patchelf
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Build desktop application
         run: npm run tauri build -- --no-bundle
       - name: Install tauri-driver
