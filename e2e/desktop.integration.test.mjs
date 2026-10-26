@@ -65,8 +65,8 @@ async function fill(selector, value) {
   await element.sendKeys(value);
   await browser.wait(
     async () => (await readDom(selector, "value")) === value,
-    3_000,
-    `Input ${selector} did not retain the requested value`,
+    Math.max(3_000, Math.min(10_000, value.length * 15)),
+    `Input ${selector} did not retain the requested value (${value.length} characters)`,
   );
 }
 
