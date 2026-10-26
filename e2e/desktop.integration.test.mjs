@@ -203,6 +203,38 @@ test(
       assert.equal(selectedCell, insertedLabel);
       await captureScreenshot("03-select-readback.png");
 
+      await click('[data-testid="schema-explorer-nav"]');
+      await browser.wait(
+        async () =>
+          (await readDom('[data-testid="schema-toggle-public"]')) !== null &&
+          (await readDom('[data-testid="schema-loading"]')) === null,
+        15_000,
+        "Schema explorer did not load the public schema",
+      );
+      await click('[data-testid="schema-toggle-public"]');
+      await browser.wait(
+        async () => (await readDom('[data-testid="schema-object-public-dbux_e2e_items"]')) !== null,
+        10_000,
+        "The integration table was not listed by the schema explorer",
+      );
+      await click('[data-testid="schema-object-public-dbux_e2e_items"]');
+      const idColumn = await browser.wait(
+        async () => {
+          const value = await readDom('[data-testid="schema-column-public-dbux_e2e_items-id"]');
+          return value || false;
+        },
+        10_000,
+        "The table ID column was not shown",
+      );
+      assert.match(idColumn, /id.*bigint/i);
+      assert.match(idColumn, /PK/);
+      assert.match(idColumn, /NOT NULL/);
+      const labelColumn = await readDom('[data-testid="schema-column-public-dbux_e2e_items-label"]');
+      assert.match(labelColumn, /label.*text/i);
+      assert.match(labelColumn, /NOT NULL/);
+      await captureScreenshot("04-schema-explorer.png");
+      await click('[data-testid="query-editor-nav"]');
+
       const typedValuesSql = `SELECT NULL::TEXT AS actual_null, ''::TEXT AS empty_text, 9223372036854775807::BIGINT AS big_integer, 12345678901234567890.123456789::NUMERIC AS exact_decimal, '{"pet":"dog","count":2}'::JSONB AS document, '2026-10-26 12:34:56'::TIMESTAMP AS local_timestamp, '2026-10-26 12:34:56+00'::TIMESTAMPTZ AS utc_timestamp, '550e8400-e29b-41d4-a716-446655440000'::UUID AS identifier, decode('00ff10', 'hex')::BYTEA AS payload`;
       await executeSql(typedValuesSql, "Query completed");
 
@@ -230,7 +262,7 @@ test(
         "550e8400-e29b-41d4-a716-446655440000",
       );
       assert.equal(await readDom('[data-testid="result-cell-0-8"]'), "00ff10");
-      await captureScreenshot("04-type-fidelity.png");
+      await captureScreenshot("05-type-fidelity.png");
 
       await executeSql("SELECT generate_series(1, 1001) AS n", "result truncated at 1000");
       const visibleRows = await browser.executeScript(
@@ -243,7 +275,7 @@ test(
         /Showing the first 1000 rows/,
         "The UI should explain that results have been truncated",
       );
-      await captureScreenshot("04-result-limit.png");
+      await captureScreenshot("06-result-limit.png");
 
       await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
       assert.equal(
