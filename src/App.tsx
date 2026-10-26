@@ -30,11 +30,26 @@ interface SchemaColumn {
   primaryKey: boolean;
 }
 
+interface SchemaIndex {
+  name: string;
+  definition: string;
+  unique: boolean;
+  primary: boolean;
+}
+
+interface SchemaConstraint {
+  name: string;
+  constraintType: string;
+  definition: string;
+}
+
 interface SchemaObject {
   schemaName: string;
   objectName: string;
   objectType: string;
   columns: SchemaColumn[];
+  indexes: SchemaIndex[];
+  constraints: SchemaConstraint[];
 }
 
 interface ConnectionSummary {
@@ -458,6 +473,49 @@ export default function App() {
                                           </span>
                                         </div>
                                       ))}
+                                      <section className="schema-metadata-section" data-testid={`schema-indexes-${object.schemaName}-${object.objectName}`}>
+                                        <div className="schema-metadata-heading">
+                                          <strong>Indexes</strong><small>{object.indexes.length}</small>
+                                        </div>
+                                        {object.indexes.length ? (
+                                          <div className="schema-metadata-list">
+                                            {object.indexes.map((index) => (
+                                              <div className="schema-metadata-row" key={index.name} data-testid={`schema-index-${object.schemaName}-${object.objectName}-${index.name}`}>
+                                                <div className="schema-metadata-title">
+                                                  <code title={index.name}>{index.name}</code>
+                                                  <span className="schema-metadata-tags">
+                                                    {index.primary && <span className="schema-tag schema-tag-key">PRIMARY KEY</span>}
+                                                    {index.unique && <span className="schema-tag schema-tag-unique">UNIQUE</span>}
+                                                  </span>
+                                                </div>
+                                                <code className="schema-metadata-definition" title={index.definition}>{index.definition}</code>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="schema-metadata-empty">No indexes reported.</div>
+                                        )}
+                                      </section>
+                                      <section className="schema-metadata-section" data-testid={`schema-constraints-${object.schemaName}-${object.objectName}`}>
+                                        <div className="schema-metadata-heading">
+                                          <strong>Constraints</strong><small>{object.constraints.length}</small>
+                                        </div>
+                                        {object.constraints.length ? (
+                                          <div className="schema-metadata-list">
+                                            {object.constraints.map((constraint) => (
+                                              <div className="schema-metadata-row" key={constraint.name} data-testid={`schema-constraint-${object.schemaName}-${object.objectName}-${constraint.name}`}>
+                                                <div className="schema-metadata-title">
+                                                  <code title={constraint.name}>{constraint.name}</code>
+                                                  <span className="schema-metadata-type">{constraint.constraintType}</span>
+                                                </div>
+                                                <code className="schema-metadata-definition" title={constraint.definition}>{constraint.definition}</code>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="schema-metadata-empty">No constraints reported.</div>
+                                        )}
+                                      </section>
                                     </div>
                                   )}
                                 </div>
