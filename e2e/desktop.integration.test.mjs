@@ -208,9 +208,10 @@ test(
         "return document.querySelectorAll('.result-grid tbody tr').length;",
       );
       assert.equal(visibleRows, 1000, "The result grid should render no more than 1,000 rows");
+      const truncationNotice = ((await readDom('[data-testid="result-truncation"]')) ?? "").replaceAll(",", "");
       assert.match(
-        (await readDom('[data-testid="result-truncation"]')) ?? "",
-        /Showing the first 1,000 rows/,
+        truncationNotice,
+        /Showing the first 1000 rows/,
         "The UI should explain that results have been truncated",
       );
       await captureScreenshot("04-result-limit.png");
