@@ -325,6 +325,33 @@ test(
       );
       await captureScreenshot("07-result-limit.png");
 
+      await executeSql(
+        `SELECT 'plain'::TEXT AS plain, 'with,comma'::TEXT AS comma_value, 'say "hi"'::TEXT AS quoted_value, E'line1\\nline2'::TEXT AS multiline_value, '=1+1'::TEXT AS spreadsheet_formula, NULL::TEXT AS null_value, ''::TEXT AS empty_text`,
+        "Query completed",
+      );
+      await browser.executeScript(`
+        window.__dbuxOriginalCreateObjectURL = URL.createObjectURL.bind(URL);
+        window.__dbuxCsvExportText = null;
+        URL.createObjectURL = (blob) => {
+          blob.text().then((text) => { window.__dbuxCsvExportText = text; });
+          return window.__dbuxOriginalCreateObjectURL(blob);
+        };
+      `);
+      await click('[data-testid="export-results-csv"]');
+      const exportedCsv = await browser.wait(
+        async () => {
+          const value = await browser.executeScript("return window.__dbuxCsvExportText;");
+          return typeof value === "string" ? value : false;
+        },
+        10_000,
+        "CSV export did not produce a downloadable file payload",
+      );
+      const csv = exportedCsv.replace(/^\\uFEFF/, "");
+      assert.match(csv, /"plain","comma_value","quoted_value","multiline_value","spreadsheet_formula","null_value","empty_text"\\r\\n/);
+      assert.match(csv, /"plain","with,comma","say ""hi""","line1\\nline2","'=1\\+1","",""\\r\\n/);
+      assert.ok(exportedCsv.startsWith("\\uFEFF"), "CSV downloads should include a UTF-8 BOM for spreadsheet compatibility");
+      await captureScreenshot("08-csv-export.png");
+
       await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
       assert.equal(
         await readDom('[data-testid="result-cell-0-0"]'),
