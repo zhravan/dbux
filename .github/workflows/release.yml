@@ -6,14 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing SemVer tag to retry (for example v0.1.0); leave blank to do nothing
+        description: Existing release tag to retry (for example dbux-v0.2.0); leave blank to do nothing
         required: false
         type: string
 
+# Default to read-only. Grant write access only to jobs that need it.
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref }}
@@ -23,6 +22,10 @@ jobs:
   release-please:
     name: Determine SemVer release
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -43,27 +46,33 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       tag_name: ${{ steps.validate.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate strict SemVer tag and synchronized app versions
+      - name: Validate SemVer tag and synchronized app versions
         id: validate
         env:
           RELEASE_TAG: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
         run: |
           node scripts/validate-release-version.mjs "$RELEASE_TAG"
           echo "tag_name=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.platform }} installer
     needs: validate-version
     if: needs.validate-version.result == 'success'
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -85,6 +94,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate-version.outputs.tag_name }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -133,10 +143,12 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish release and mark it latest
+    name: Publish release and preserve latest designation
     needs: [validate-version, build]
     if: needs.validate-version.result == 'success' && needs.build.result == 'success'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -153,7 +165,7 @@ jobs:
           test -n "$(find release-assets -type f -name '*.dmg' -print -quit)"
           test -n "$(find release-assets -type f -name '*.msi' -print -quit)"
           test -n "$(find release-assets -type f -name '*.exe' -print -quit)"
-      - name: Attach installers and publish as latest
+      - name: Attach installers and publish release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.validate-version.outputs.tag_name }}
@@ -165,9 +177,37 @@ jobs:
             exit 1
           fi
 
+          # Release Please currently names this single component's tags dbux-vX.Y.Z.
+          # Also accept vX.Y.Z for manually created legacy tags.
+          if [[ "$RELEASE_TAG" == dbux-v* ]]; then
+            RELEASE_VERSION="${RELEASE_TAG#dbux-v}"
+          elif [[ "$RELEASE_TAG" == v* ]]; then
+            RELEASE_VERSION="${RELEASE_TAG#v}"
+          else
+            echo "Unexpected release tag format: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            RELEASE_KIND="prerelease"
+          else
+            RELEASE_KIND="stable"
+          fi
+
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --draft=false --latest
+            if [[ "$RELEASE_KIND" == "prerelease" ]]; then
+              gh release edit "$RELEASE_TAG" --draft=false --prerelease
+            else
+              # Do not force an older retried version to become Latest.
+              # GitHub's default stable-release selection remains in effect.
+              gh release edit "$RELEASE_TAG" --draft=false
+            fi
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --latest
+            if [[ "$RELEASE_KIND" == "prerelease" ]]; then
+              gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --prerelease
+            else
+              # Leave Latest selection to GitHub's stable-release version rules.
+              gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes
+            fi
           fi
