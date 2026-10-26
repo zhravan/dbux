@@ -194,6 +194,8 @@ jobs:
             libayatana-appindicator3-dev \
             patchelf
       - run: npm install --no-audit --no-fund
+      - name: Generate platform icons
+        run: npm run tauri -- icon src-tauri/icons/icon.svg --output src-tauri/icons
       - name: Build desktop application
         run: npm run tauri build -- --no-bundle
       - name: Install tauri-driver
