@@ -61,7 +61,7 @@ jobs:
       - name: Install WiX Toolset
         if: runner.os == 'Windows'
         run: choco install wixtoolset -y --no-progress
-      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-audit --no-fund
       - name: Build installer bundles
         run: npm run tauri build
       - name: Upload native installers
