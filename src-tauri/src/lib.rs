@@ -377,7 +377,32 @@ fn format_database_error(error: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::returns_rows;
+    use super::{decode_optional, returns_rows};
+    use serde_json::{json, Value};
+
+    #[test]
+    fn preserves_null_without_converting_decode_errors_to_null() {
+        let null_value = decode_optional::<String>(Ok(None), Value::String);
+        assert_eq!(null_value.unwrap(), Value::Null);
+
+        let decode_error = decode_optional::<String>(
+            Err("intentional decode failure".to_string()),
+            Value::String,
+        );
+        assert_eq!(
+            decode_error.unwrap_err(),
+            "intentional decode failure",
+            "a decoder failure must remain an error, not become SQL NULL",
+        );
+    }
+
+    #[test]
+    fn decoder_can_preserve_exact_integer_text() {
+        let integer = decode_optional(Ok(Some(9_223_372_036_854_775_807_i64)), |value| {
+            Value::String(value.to_string())
+        });
+        assert_eq!(integer.unwrap(), json!("9223372036854775807"));
+    }
 
     #[test]
     fn recognizes_queries_that_return_rows() {
