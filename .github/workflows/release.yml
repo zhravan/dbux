@@ -59,7 +59,7 @@ jobs:
           const fs = require('node:fs');
 
           const tag = process.env.RELEASE_TAG || '';
-          const semver = /^v(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$/;
+          const semver = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
           if (!semver.test(tag)) {
             throw new Error(`Release tag "${tag}" is not valid SemVer with the required v prefix (for example v1.2.3).`);
@@ -69,8 +69,8 @@ jobs:
           const packageVersion = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
           const tauriVersion = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8')).version;
           const cargoText = fs.readFileSync('src-tauri/Cargo.toml', 'utf8');
-          const packageSection = cargoText.split(/^\\[package\\]\\s*$/m)[1]?.split(/^\\[/m)[0];
-          const cargoVersion = packageSection?.match(/^version\\s*=\\s*"([^"]+)"/m)?.[1];
+          const packageSection = cargoText.split(/^\[package\]\s*$/m)[1]?.split(/^\[/m)[0];
+          const cargoVersion = packageSection?.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
 
           const versions = { 'package.json': packageVersion, 'tauri.conf.json': tauriVersion, 'Cargo.toml': cargoVersion };
           for (const [file, version] of Object.entries(versions)) {
@@ -117,18 +117,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \\
-            libwebkit2gtk-4.1-dev \\
-            build-essential \\
-            curl \\
-            wget \\
-            file \\
-            libxdo-dev \\
-            libssl-dev \\
-            librsvg2-dev \\
-            libayatana-appindicator3-dev \\
-            patchelf \\
-            rpm
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf rpm
       - name: Install WiX Toolset
         if: runner.os == 'Windows'
         run: choco install wixtoolset -y --no-progress
@@ -204,8 +193,5 @@ jobs:
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
             gh release edit "$RELEASE_TAG" --draft=false --latest
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" \\
-              --verify-tag \\
-              --generate-notes \\
-              --latest
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --latest
           fi
