@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const SEMVER_TAG_PATTERN = /^v(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$/;
+// Strict SemVer with the repository's standard v prefix.
+export const SEMVER_TAG_PATTERN = /^v(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:[.](?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:[+]([0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*))?$/;
 
 export function getCurrentVersions(rootDir = process.cwd()) {
   const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
@@ -14,8 +15,11 @@ export function getCurrentVersions(rootDir = process.cwd()) {
     throw new Error('src-tauri/Cargo.toml is missing the [package] section.');
   }
 
-  const packageSection = cargoText.slice(packageStart + '[package]'.length).split(/^\\[/m)[0];
-  const cargoVersion = packageSection.match(/^version\\s*=\\s*"([^"]+)"/m)?.[1];
+  const afterPackageHeader = cargoText.slice(packageStart + '[package]'.length);
+  const nextSectionAt = afterPackageHeader.indexOf('\n[');
+  const packageSection = nextSectionAt >= 0 ? afterPackageHeader.slice(0, nextSectionAt) : afterPackageHeader;
+  const versionLine = packageSection.split('\n').map((line) => line.trim()).find((line) => line.startsWith('version') && line.includes('='));
+  const cargoVersion = versionLine?.split('"')[1];
 
   return {
     'package.json': packageJson.version,
@@ -45,7 +49,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     if (!tag) {
       throw new Error('Usage: node scripts/validate-release-version.mjs vMAJOR.MINOR.PATCH');
     }
-    const version = validateReleaseVersion(tag, getCurrentVersions());
+    validateReleaseVersion(tag, getCurrentVersions());
     console.log('Validated ' + tag + '; package.json, Tauri, and Cargo versions are synchronized.');
   } catch (error) {
     console.error(error.message);
