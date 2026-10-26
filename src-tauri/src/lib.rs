@@ -208,10 +208,19 @@ async fn execute_query(
                 row.columns()
                     .iter()
                     .enumerate()
-                    .map(|(index, column)| decode_cell(row, index, column.type_info().name()))
-                    .collect()
+                    .map(|(index, column)| {
+                        decode_cell(row, index, column.type_info().name()).map_err(|error| {
+                            format!(
+                                "Could not decode column '{}' ({}): {}",
+                                column.name(),
+                                column.type_info().name(),
+                                format_database_error(&error),
+                            )
+                        })
+                    })
+                    .collect::<Result<Vec<Value>, String>>()
             })
-            .collect::<Vec<Vec<Value>>>();
+            .collect::<Result<Vec<Vec<Value>>, String>>()?;
 
         let row_count = rows.len() as u64;
         let message = if truncated {
@@ -258,14 +267,25 @@ fn returns_rows(sql: &str) -> bool {
     ) || upper.contains("RETURNING")
 }
 
-fn decode_cell(row: &PgRow, index: usize, type_name: &str) -> Value {
+fn decode_optional<T>(
+    value: Result<Option<T>, String>,
+    map: impl FnOnce(T) -> Value,
+) -> Result<Value, String> {
+    match value {
+        Ok(Some(value)) => Ok(map(value)),
+        Ok(None) => Ok(Value::Null),
+        Err(error) => Err(error),
+    }
+}
+
+fn decode_cell(row: &PgRow, index: usize, type_name: &str) -> Result<Value, String> {
     macro_rules! decode {
         ($ty:ty) => {
-            row.try_get::<Option<$ty>, _>(index)
-                .ok()
-                .flatten()
-                .map(|value| json!(value))
-                .unwrap_or(Value::Null)
+            decode_optional(
+                row.try_get::<Option<$ty>, _>(index)
+                    .map_err(|error| error.to_string()),
+                |value| json!(value),
+            )
         };
     }
 
@@ -273,68 +293,66 @@ fn decode_cell(row: &PgRow, index: usize, type_name: &str) -> Value {
         "BOOL" => decode!(bool),
         "INT2" => decode!(i16),
         "INT4" => decode!(i32),
-        "INT8" => decode!(i64),
+        // JavaScript numbers cannot exactly represent all i64 values. Keep BIGINT
+        // values as decimal strings so the UI never silently rounds them.
+        "INT8" => decode_optional(
+            row.try_get::<Option<i64>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_string()),
+        ),
         "FLOAT4" => decode!(f32),
         "FLOAT8" => decode!(f64),
-        "NUMERIC" => row
-            .try_get::<Option<BigDecimal>, _>(index)
-            .ok()
-            .flatten()
-            .map(|value| Value::String(value.to_string()))
-            .unwrap_or(Value::Null),
-        "UUID" => row
-            .try_get::<Option<Uuid>, _>(index)
-            .ok()
-            .flatten()
-            .map(|value| Value::String(value.to_string()))
-            .unwrap_or(Value::Null),
-        "JSON" | "JSONB" => row
-            .try_get::<Option<Value>, _>(index)
-            .ok()
-            .flatten()
-            .unwrap_or(Value::Null),
-        "DATE" => row
-            .try_get::<Option<NaiveDate>, _>(index)
-            .ok()
-            .flatten()
-            .map(|value| Value::String(value.to_string()))
-            .unwrap_or(Value::Null),
-        "TIME" => row
-            .try_get::<Option<NaiveTime>, _>(index)
-            .ok()
-            .flatten()
-            .map(|value| Value::String(value.to_string()))
-            .unwrap_or(Value::Null),
-        "TIMESTAMP" => row
-            .try_get::<Option<NaiveDateTime>, _>(index)
-            .ok()
-            .flatten()
-            .map(|value| Value::String(value.to_string()))
-            .unwrap_or(Value::Null),
-        "TIMESTAMPTZ" => row
-            .try_get::<Option<DateTime<Utc>>, _>(index)
-            .ok()
-            .flatten()
-            .map(|value| Value::String(value.to_rfc3339()))
-            .unwrap_or(Value::Null),
-        "BYTEA" => row
-            .try_get::<Option<Vec<u8>>, _>(index)
-            .ok()
-            .flatten()
-            .map(|bytes| Value::String(encode_hex(&bytes)))
-            .unwrap_or(Value::Null),
-        "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CHAR" => row
-            .try_get::<Option<String>, _>(index)
-            .ok()
-            .flatten()
-            .map(Value::String)
-            .unwrap_or(Value::Null),
-        _ => row
-            .try_get::<Option<String>, _>(index)
-            .ok()
-            .flatten()
-            .map(Value::String)
-            .unwrap_or_else(|| json!(format!("<unsupported: {type_name}>"))),
+        "NUMERIC" => decode_optional(
+            row.try_get::<Option<BigDecimal>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_string()),
+        ),
+        "UUID" => decode_optional(
+            row.try_get::<Option<Uuid>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_string()),
+        ),
+        "JSON" | "JSONB" => decode_optional(
+            row.try_get::<Option<Value>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| value,
+        ),
+        "DATE" => decode_optional(
+            row.try_get::<Option<NaiveDate>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_string()),
+        ),
+        "TIME" => decode_optional(
+            row.try_get::<Option<NaiveTime>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_string()),
+        ),
+        "TIMESTAMP" => decode_optional(
+            row.try_get::<Option<NaiveDateTime>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_string()),
+        ),
+        "TIMESTAMPTZ" => decode_optional(
+            row.try_get::<Option<DateTime<Utc>>, _>(index)
+                .map_err(|error| error.to_string()),
+            |value| Value::String(value.to_rfc3339()),
+        ),
+        "BYTEA" => decode_optional(
+            row.try_get::<Option<Vec<u8>>, _>(index)
+                .map_err(|error| error.to_string()),
+            |bytes| Value::String(encode_hex(&bytes)),
+        ),
+        "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CHAR" => decode_optional(
+            row.try_get::<Option<String>, _>(index)
+                .map_err(|error| error.to_string()),
+            Value::String,
+        ),
+        _ => match row.try_get::<Option<String>, _>(index) {
+            Ok(Some(value)) => Ok(Value::String(value)),
+            Ok(None) => Ok(Value::Null),
+            // This is deliberately visible instead of being confused with SQL NULL.
+            Err(_) => Ok(json!(format!("<unsupported: {type_name}>"))),
+        },
     }
 }
 
