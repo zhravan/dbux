@@ -87,7 +87,7 @@ jobs:
         run: choco install wixtoolset -y --no-progress
       - run: npm install --no-audit --no-fund
       - name: Generate platform icons
-        run: npm run tauri -- icon src-tauri/icons/icon.svg --output src-tauri/icons
+        run: npm run tauri -- icon src-tauri/icons/icon-source.png --output src-tauri/icons
       - name: Build installer bundles
         run: npm run tauri build
       - name: Upload native installers
