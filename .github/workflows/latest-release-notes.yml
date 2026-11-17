@@ -1,0 +1,72 @@
+name: Update latest release notes
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - LATEST_RELEASE_NOTES.md
+
+permissions:
+  contents: write
+
+concurrency:
+  group: latest-release-notes-main
+  cancel-in-progress: false
+
+jobs:
+  update-notes:
+    name: Generate notes for latest main
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Generate release notes since the latest published release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(
+              github.rest.repos.listReleases,
+              { owner, repo, per_page: 100 }
+            );
+            const previous = releases.find(r => !r.draft && !r.prerelease && r.published_at);
+            const tag = 'latest-main';
+            const args = {
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: context.sha
+            };
+            if (previous) args.previous_tag_name = previous.tag_name;
+
+            const result = await github.rest.repos.generateReleaseNotes(args);
+            const updated = [
+              '# Latest Release Notes',
+              '',
+              '> Automatically generated from `main` after each push/merge.',
+              `> Updated: ${new Date().toISOString()}`,
+              `> Commit: ${context.sha}`,
+              previous ? `> Changes since: ${previous.tag_name}` : '> Changes since: repository history start',
+              '',
+              result.data.body || 'No categorized changes were detected.',
+              ''
+            ].join('\n');
+
+            fs.writeFileSync('LATEST_RELEASE_NOTES.md', updated);
+
+      - name: Commit updated notes when content changes
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- LATEST_RELEASE_NOTES.md; then
+            echo "Release notes are already up to date."
+            exit 0
+          fi
+          git add LATEST_RELEASE_NOTES.md
+          git commit -m "docs: update latest release notes [skip ci]"
+          git push origin HEAD:main
