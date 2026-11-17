@@ -47,14 +47,27 @@ jobs:
     if: needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
     outputs:
       tag_name: ${{ steps.validate.outputs.tag_name }}
     steps:
+      # Release Please is configured to create draft releases. In this repository
+      # the draft can exist before its git tag ref is available. Check out the
+      # triggering main commit, then ensure the version tag exists before builds.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
-          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Ensure release tag exists
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          else
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -177,8 +190,6 @@ jobs:
             exit 1
           fi
 
-          # Release Please currently names this single component's tags dbux-vX.Y.Z.
-          # Also accept vX.Y.Z for manually created legacy tags.
           if [[ "$RELEASE_TAG" == dbux-v* ]]; then
             RELEASE_VERSION="${RELEASE_TAG#dbux-v}"
           elif [[ "$RELEASE_TAG" == v* ]]; then
@@ -199,15 +210,12 @@ jobs:
             if [[ "$RELEASE_KIND" == "prerelease" ]]; then
               gh release edit "$RELEASE_TAG" --draft=false --prerelease
             else
-              # Do not force an older retried version to become Latest.
-              # GitHub's default stable-release selection remains in effect.
               gh release edit "$RELEASE_TAG" --draft=false
             fi
           else
             if [[ "$RELEASE_KIND" == "prerelease" ]]; then
               gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --prerelease
             else
-              # Leave Latest selection to GitHub's stable-release version rules.
               gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes
             fi
           fi
