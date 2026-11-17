@@ -30,11 +30,8 @@ async function captureScreenshot(filename) {
 }
 
 async function readDom(selector, property = "textContent") {
-  return browser.executeScript(
-    "const element = document.querySelector(arguments[0]); return element ? element[arguments[1]] : null;",
-    selector,
-    property,
-  );
+  if (selector === '[data-testid="sql-editor"]' && property === "value") return browser.executeScript("return window.__dbuxMonacoEditor?.getDomNode()?.isConnected ? window.__dbuxMonacoEditor.getValue() : null;");
+  return browser.executeScript("const element = document.querySelector(arguments[0]); return element ? element[arguments[1]] : null;", selector, property);
 }
 
 async function waitForDriver() {
@@ -58,6 +55,12 @@ async function click(selector) {
 }
 
 async function fill(selector, value) {
+  if (selector === '[data-testid="sql-editor"]') {
+    await browser.wait(async () => await browser.executeScript("return !!window.__dbuxMonacoEditor?.getDomNode()?.isConnected;"), 10_000, "Monaco editor did not mount");
+    await browser.executeScript("window.__dbuxMonacoEditor.setValue(arguments[0]);", value);
+    await browser.wait(async () => await browser.executeScript("return window.__dbuxMonacoEditor.getValue() === arguments[0];", value), 5_000, "Monaco editor did not accept SQL");
+    return;
+  }
   const element = await browser.wait(until.elementLocated(By.css(selector)), 10_000);
   await browser.wait(until.elementIsVisible(element), 5_000);
   await element.click();
@@ -363,11 +366,43 @@ test(
       await captureScreenshot("08-csv-export.png");
 
       await executeSql("SELECT 1 AS connection_still_usable", "Query completed");
-      assert.equal(
-        await readDom('[data-testid="result-cell-0-0"]'),
-        "1",
-        "The PostgreSQL connection should remain usable after stopping a result stream early",
-      );
+      assert.equal(await readDom('[data-testid="result-cell-0-0"]'), "1", "The PostgreSQL connection should remain usable after stopping a result stream early");
+      assert.ok(await readDom('[data-testid="monaco-editor"]'), "Monaco editor should be mounted");
+
+      await click('[data-testid="new-query-tab"]');
+      await fill('[data-testid="sql-editor"]', "SELECT 42 AS saved_answer");
+      await click('[data-testid="save-query"]');
+      await browser.wait(until.alertIsPresent(), 5_000);
+      await browser.switchTo().alert().sendKeys("E2E saved query");
+      await browser.switchTo().alert().accept();
+      await click(".sidebar .nav-item:nth-of-type(4)");
+      await browser.wait(until.elementLocated(By.css('[data-testid="saved-queries-view"]')), 5_000);
+      assert.equal(await readDom(".saved-query-open strong"), "E2E saved query");
+      await click(".sidebar .nav-item:nth-of-type(2)");
+      await browser.wait(until.elementLocated(By.css('[data-testid="history-search"]')), 5_000);
+      await fill('[data-testid="history-search"]', "connection_still_usable");
+      assert.ok((await readDom(".history-item code"))?.includes("connection_still_usable"), "History search should find executed SQL");
+
+      await click(".sidebar .nav-item:nth-of-type(1)");
+      await fill('[data-testid="sql-editor"]', "SELECT pg_sleep(20)");
+      await click('[data-testid="run-query"]');
+      await browser.wait(until.elementLocated(By.css('[data-testid="cancel-query"]')), 5_000);
+      await click('[data-testid="cancel-query"]');
+      await browser.wait(async () => ((await readDom('[data-testid="query-status"]')) ?? "").includes("Query failed"), 10_000, "Cancelled query did not settle");
+      await executeSql("SELECT 7 AS after_cancel", "Query completed");
+      assert.equal(await readDom('[data-testid="result-cell-0-0"]'), "7", "Connection should remain usable after cancellation");
+      await click('[data-testid="active-connection"] .connection-disconnect');
+      await click(".workspace-toolbar .primary-button");
+      await browser.wait(until.elementLocated(By.css('select[aria-label="Saved connection profile"]')), 5_000);
+      const savedProfile = await browser.findElement(By.css('select[aria-label="Saved connection profile"]'));
+      await savedProfile.sendKeys("CI PostgreSQL");
+      await fill('input[aria-label="Password"]', "definitely-not-the-password");
+      await click('[data-testid="connect-database"]');
+      await browser.wait(until.elementLocated(By.css('[data-testid="connection-error"]')), 10_000, "Invalid PostgreSQL credentials should be rejected");
+      await fill('input[aria-label="Password"]', process.env.DBUX_TEST_DB_PASSWORD ?? "dbux_test");
+      await click('[data-testid="connect-database"]');
+      const reconnected = await waitForConnection();
+      assert.equal(reconnected.ok, true, "A saved profile should reconnect when valid credentials are supplied");
     } catch (error) {
       if (browser) {
         try {

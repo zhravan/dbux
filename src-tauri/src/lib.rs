@@ -25,6 +25,7 @@ const DEFAULT_QUERY_ROW_LIMIT: usize = 1_000;
 #[derive(Default)]
 struct DbState {
     pools: Mutex<HashMap<String, PgPool>>,
+    active_queries: Mutex<HashMap<String, (PgPool, i32)>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,7 +114,8 @@ pub fn run() {
             connect_postgres,
             disconnect_database,
             list_schema_objects,
-            execute_query
+            execute_query,
+            cancel_query
         ])
         .run(tauri::generate_context!())
         .expect("error while running DBUX");
@@ -131,13 +133,21 @@ async fn connect_postgres(
         return Err("Host, database, and username are required.".to_string());
     }
 
-    let ssl_mode = match config.ssl_mode.as_str() {
-        "disable" => PgSslMode::Disable,
-        "require" => PgSslMode::Require,
-        "verify-ca" => PgSslMode::VerifyCa,
-        "verify-full" => PgSslMode::VerifyFull,
-        _ => PgSslMode::Prefer,
-    };
+    if config.port == 0 {
+        return Err("Port must be between 1 and 65535.".to_string());
+    }
+    let ssl_mode =
+        match config.ssl_mode.as_str() {
+            "disable" => PgSslMode::Disable,
+            "prefer" => PgSslMode::Prefer,
+            "require" => PgSslMode::Require,
+            "verify-ca" => PgSslMode::VerifyCa,
+            "verify-full" => PgSslMode::VerifyFull,
+            _ => return Err(
+                "Unsupported TLS mode. Choose disable, prefer, require, verify-ca, or verify-full."
+                    .to_string(),
+            ),
+        };
 
     let options = PgConnectOptions::new()
         .host(&config.host)
@@ -405,6 +415,7 @@ async fn list_schema_objects(
 async fn execute_query(
     connection_id: String,
     sql: String,
+    query_id: String,
     state: State<'_, DbState>,
 ) -> Result<QueryExecutionResult, String> {
     let pool = state
@@ -414,96 +425,132 @@ async fn execute_query(
         .get(&connection_id)
         .cloned()
         .ok_or_else(|| "Database connection is no longer active.".to_string())?;
-
     let statement = sql.trim();
     if statement.is_empty() {
         return Err("Enter a SQL statement to execute.".to_string());
     }
+    if query_id.trim().is_empty() {
+        return Err("Query identifier is required.".to_string());
+    }
+
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|error| format_database_error(&error.to_string()))?;
+    let backend_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(|error| format_database_error(&error.to_string()))?;
+    state
+        .active_queries
+        .lock()
+        .map_err(|_| "Query manager is unavailable.".to_string())?
+        .insert(query_id.clone(), (pool.clone(), backend_pid));
 
     let started = Instant::now();
-    if returns_rows(statement) {
-        // Stream rows instead of loading the full result into memory. Read one extra
-        // row to distinguish a complete result from one truncated at the UI limit.
-        let mut stream = sqlx::query(statement).fetch(&pool);
-        let mut fetched = Vec::with_capacity(DEFAULT_QUERY_ROW_LIMIT.min(256));
-        let mut truncated = false;
-        while let Some(row) = stream.next().await {
-            let row = row.map_err(|error| format_database_error(&error.to_string()))?;
-            if fetched.len() == DEFAULT_QUERY_ROW_LIMIT {
-                truncated = true;
-                break;
+    let execution: Result<QueryExecutionResult, String> = async {
+        if returns_rows(statement) {
+            let mut stream = sqlx::query(statement).fetch(&mut *connection);
+            let mut fetched = Vec::with_capacity(DEFAULT_QUERY_ROW_LIMIT.min(256));
+            let mut truncated = false;
+            while let Some(row) = stream.next().await {
+                let row = row.map_err(|error| format_database_error(&error.to_string()))?;
+                if fetched.len() == DEFAULT_QUERY_ROW_LIMIT {
+                    truncated = true;
+                    break;
+                }
+                fetched.push(row);
             }
-            fetched.push(row);
-        }
-        drop(stream);
-
-        let columns = fetched
-            .first()
-            .map(|row| {
-                row.columns()
-                    .iter()
-                    .map(|column| ColumnInfo {
-                        name: column.name().to_string(),
-                        data_type: column.type_info().name().to_string(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let rows = fetched
-            .iter()
-            .map(|row| {
-                row.columns()
-                    .iter()
-                    .enumerate()
-                    .map(|(index, column)| {
-                        decode_cell(row, index, column.type_info().name()).map_err(|error| {
-                            format!(
-                                "Could not decode column '{}' ({}): {}",
-                                column.name(),
-                                column.type_info().name(),
-                                format_database_error(&error),
-                            )
+            drop(stream);
+            let columns = fetched
+                .first()
+                .map(|row| {
+                    row.columns()
+                        .iter()
+                        .map(|column| ColumnInfo {
+                            name: column.name().to_string(),
+                            data_type: column.type_info().name().to_string(),
                         })
-                    })
-                    .collect::<Result<Vec<Value>, String>>()
+                        .collect()
+                })
+                .unwrap_or_default();
+            let rows = fetched
+                .iter()
+                .map(|row| {
+                    row.columns()
+                        .iter()
+                        .enumerate()
+                        .map(|(index, column)| {
+                            decode_cell(row, index, column.type_info().name()).map_err(|error| {
+                                format!(
+                                    "Could not decode column '{}' ({}): {}",
+                                    column.name(),
+                                    column.type_info().name(),
+                                    format_database_error(&error)
+                                )
+                            })
+                        })
+                        .collect::<Result<Vec<Value>, String>>()
+                })
+                .collect::<Result<Vec<Vec<Value>>, String>>()?;
+            let row_count = rows.len() as u64;
+            let message = if truncated {
+                format!(
+                    "Query completed · showing first {row_count} row(s); result truncated at {DEFAULT_QUERY_ROW_LIMIT}"
+                )
+            } else {
+                format!("Query completed · {row_count} row(s) returned")
+            };
+            Ok(QueryExecutionResult {
+                columns,
+                rows,
+                rows_affected: row_count,
+                duration_ms: started.elapsed().as_millis(),
+                truncated,
+                row_limit: DEFAULT_QUERY_ROW_LIMIT,
+                message,
             })
-            .collect::<Result<Vec<Vec<Value>>, String>>()?;
-
-        let row_count = rows.len() as u64;
-        let message = if truncated {
-            format!(
-                "Query completed · showing first {row_count} row(s); result truncated at {DEFAULT_QUERY_ROW_LIMIT}"
-            )
         } else {
-            format!("Query completed · {row_count} row(s) returned")
-        };
-        Ok(QueryExecutionResult {
-            columns,
-            rows,
-            rows_affected: row_count,
-            duration_ms: started.elapsed().as_millis(),
-            truncated,
-            row_limit: DEFAULT_QUERY_ROW_LIMIT,
-            message,
-        })
-    } else {
-        let result = sqlx::query(statement)
-            .execute(&pool)
-            .await
-            .map_err(|error| format_database_error(&error.to_string()))?;
-        let rows_affected = result.rows_affected();
-
-        Ok(QueryExecutionResult {
-            columns: Vec::new(),
-            rows: Vec::new(),
-            rows_affected,
-            duration_ms: started.elapsed().as_millis(),
-            truncated: false,
-            row_limit: DEFAULT_QUERY_ROW_LIMIT,
-            message: format!("Statement completed · {rows_affected} row(s) affected"),
-        })
+            let result = sqlx::query(statement)
+                .execute(&mut *connection)
+                .await
+                .map_err(|error| format_database_error(&error.to_string()))?;
+            let rows_affected = result.rows_affected();
+            Ok(QueryExecutionResult {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                rows_affected,
+                duration_ms: started.elapsed().as_millis(),
+                truncated: false,
+                row_limit: DEFAULT_QUERY_ROW_LIMIT,
+                message: format!("Statement completed · {rows_affected} row(s) affected"),
+            })
+        }
     }
+    .await;
+
+    if let Ok(mut active) = state.active_queries.lock() {
+        active.remove(&query_id);
+    }
+    execution
+}
+
+#[tauri::command]
+async fn cancel_query(query_id: String, state: State<'_, DbState>) -> Result<bool, String> {
+    let active = state
+        .active_queries
+        .lock()
+        .map_err(|_| "Query manager is unavailable.".to_string())?
+        .get(&query_id)
+        .cloned();
+    let Some((pool, backend_pid)) = active else {
+        return Ok(false);
+    };
+    sqlx::query_scalar::<_, bool>("SELECT pg_cancel_backend($1)")
+        .bind(backend_pid)
+        .fetch_one(&pool)
+        .await
+        .map_err(|error| format_database_error(&error.to_string()))
 }
 
 fn returns_rows(sql: &str) -> bool {
