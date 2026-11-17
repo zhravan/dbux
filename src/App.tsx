@@ -18,9 +18,14 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState } from "react";
+import Editor from "@monaco-editor/react";
 
-type WorkspaceTab = "query" | "history" | "schema";
+type WorkspaceTab = "query" | "history" | "schema" | "saved";
+interface QueryTab { id: string; title: string; sql: string; }
+interface HistoryItem { id: string; sql: string; message: string; time: string; }
+interface SavedProfile { name: string; host: string; port: string; database: string; username: string; sslMode: string; }
+let sqlCompletionProviderRegistered = false;
 type CellValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
 interface SchemaColumn {
@@ -121,16 +126,31 @@ export default function App() {
   const [connection, setConnection] = useState<ConnectionSummary | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [running, setRunning] = useState(false);
-  const [sql, setSql] = useState("SELECT current_database();");
+  const [queryTabs, setQueryTabs] = useState<QueryTab[]>([{ id: "query-1", title: "Untitled query", sql: "SELECT current_database();" }]);
+  const [activeQueryTabId, setActiveQueryTabId] = useState("query-1");
+  const sql = queryTabs.find((tab) => tab.id === activeQueryTabId)?.sql ?? "";
+  const setSql = (value: string) => setQueryTabs((tabs) => tabs.map((tab) => tab.id === activeQueryTabId ? { ...tab, sql: value } : tab));
+  const [savedQueries, setSavedQueries] = useState<{ id: string; name: string; sql: string }[]>(() => { try { return JSON.parse(localStorage.getItem("dbux.savedQueries") ?? "[]"); } catch { return []; } });
+  const [historySearch, setHistorySearch] = useState("");
+  const [savedSearch, setSavedSearch] = useState("");
+  const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>(() => { try { return JSON.parse(localStorage.getItem("dbux.connectionProfiles") ?? "[]"); } catch { return []; } });
+  const [activeQueryId, setActiveQueryId] = useState<string | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [queryError, setQueryError] = useState("");
   const [connectionError, setConnectionError] = useState("");
-  const [history, setHistory] = useState<{ sql: string; message: string; time: string }[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>(() => { try { return JSON.parse(localStorage.getItem("dbux.queryHistory") ?? "[]"); } catch { return []; } });
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>([]);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaError, setSchemaError] = useState("");
   const [expandedSchemas, setExpandedSchemas] = useState<string[]>([]);
   const [expandedObjects, setExpandedObjects] = useState<string[]>([]);
+  const schemaObjectsRef = useRef(schemaObjects);
+  schemaObjectsRef.current = schemaObjects;
+
+  const createQueryTab = () => { const id = `query-${Date.now()}`; setQueryTabs((tabs) => [...tabs, { id, title: `Query ${tabs.length + 1}`, sql: "" }]); setActiveQueryTabId(id); setActiveTab("query"); };
+  const closeQueryTab = (id: string) => { if (queryTabs.length === 1) { setQueryTabs([{ id: "query-1", title: "Untitled query", sql: "" }]); setActiveQueryTabId("query-1"); return; } const remaining = queryTabs.filter((tab) => tab.id !== id); setQueryTabs(remaining); if (activeQueryTabId === id) setActiveQueryTabId(remaining[0].id); };
+  const saveCurrentQuery = () => { const name = window.prompt("Name this query", queryTabs.find((tab) => tab.id === activeQueryTabId)?.title ?? "Saved query"); if (!name?.trim() || !sql.trim()) return; const next = [...savedQueries.filter((item) => item.name !== name.trim()), { id: crypto.randomUUID(), name: name.trim(), sql }]; setSavedQueries(next); localStorage.setItem("dbux.savedQueries", JSON.stringify(next)); };
+  const deleteSavedQuery = (id: string) => { const next = savedQueries.filter((item) => item.id !== id); setSavedQueries(next); localStorage.setItem("dbux.savedQueries", JSON.stringify(next)); };
 
   const refreshSchema = async () => {
     if (!connection) {
@@ -168,6 +188,8 @@ export default function App() {
       const connected = await invoke<ConnectionSummary>("connect_postgres", {
         config: { ...form, port: Number(form.port) },
       });
+      const profile: SavedProfile = { name: form.name, host: form.host, port: form.port, database: form.database, username: form.username, sslMode: form.sslMode };
+      const nextProfiles = [...savedProfiles.filter((item) => item.name !== profile.name), profile]; setSavedProfiles(nextProfiles); localStorage.setItem("dbux.connectionProfiles", JSON.stringify(nextProfiles));
       setConnection(connected);
       setSchemaObjects([]);
       setSchemaError("");
@@ -200,6 +222,7 @@ export default function App() {
 
   const runQuery = async (statement = sql) => {
     if (!connection || !statement.trim() || running) return;
+    const queryId = crypto.randomUUID(); setActiveQueryId(queryId);
     setSql(statement);
     setActiveTab("query");
     setRunning(true);
@@ -208,19 +231,20 @@ export default function App() {
       const result = await invoke<QueryResult>("execute_query", {
         connectionId: connection.id,
         sql: statement,
+        queryId,
       });
       setQueryResult(result);
-      setHistory((items) => [
-        { sql: statement, message: result.message, time: new Date().toLocaleTimeString() },
-        ...items,
-      ]);
+      setHistory((items) => { const next = [{ id: crypto.randomUUID(), sql: statement, message: result.message, time: new Date().toLocaleString() }, ...items].slice(0, 500); localStorage.setItem("dbux.queryHistory", JSON.stringify(next)); return next; });
     } catch (error) {
       setQueryResult(null);
       setQueryError(String(error));
+      setHistory((items) => { const next = [{ id: crypto.randomUUID(), sql: statement, message: String(error), time: new Date().toLocaleString() }, ...items].slice(0, 500); localStorage.setItem("dbux.queryHistory", JSON.stringify(next)); return next; });
     } finally {
-      setRunning(false);
+      setRunning(false); setActiveQueryId(null);
     }
   };
+
+  const cancelQuery = async () => { if (!activeQueryId) return; try { await invoke("cancel_query", { queryId: activeQueryId }); } catch (error) { setQueryError(String(error)); } };
 
   const openSchemaExplorer = () => {
     setActiveTab("schema");
@@ -243,13 +267,6 @@ export default function App() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  };
-
-  const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-      event.preventDefault();
-      void runQuery();
-    }
   };
 
   return (
@@ -299,7 +316,7 @@ export default function App() {
             <button className={`nav-item ${activeTab === "query" ? "selected" : ""}`} data-testid="query-editor-nav" onClick={() => setActiveTab("query")}><TerminalSquare size={15} /><span>Query editor</span><kbd>⌘ 1</kbd></button>
             <button className={`nav-item ${activeTab === "history" ? "selected" : ""}`} onClick={() => setActiveTab("history")}><FileClock size={15} /><span>Query history</span></button>
             <button className={`nav-item ${activeTab === "schema" ? "selected" : ""}`} data-testid="schema-explorer-nav" onClick={openSchemaExplorer}><Database size={15} /><span>Schema explorer</span></button>
-            <button className="nav-item" onClick={() => setSql("SELECT current_database();")}><FolderOpen size={15} /><span>Saved queries</span></button>
+            <button className={`nav-item ${activeTab === "saved" ? "selected" : ""}`} onClick={() => setActiveTab("saved")}><FolderOpen size={15} /><span>Saved queries</span></button>
           </div>
 
           <div className="sidebar-bottom">
@@ -313,7 +330,7 @@ export default function App() {
           <div className="workspace-toolbar">
             <div className="breadcrumbs">
               <span>Workspace</span><span className="crumb-separator">/</span>
-              <strong>{activeTab === "query" ? "Query editor" : activeTab === "history" ? "Query history" : "Schema explorer"}</strong>
+              <strong>{activeTab === "query" ? "Query editor" : activeTab === "history" ? "Query history" : activeTab === "saved" ? "Saved queries" : "Schema explorer"}</strong>
             </div>
             <div className="toolbar-actions">
               <button className="secondary-button" onClick={() => setShowConnectionForm(true)}><Plus size={14} /> New connection</button>
@@ -327,29 +344,19 @@ export default function App() {
 
           {activeTab === "query" ? (
             <div className="editor-layout">
-              <div className="editor-tabs">
-                <div className="editor-tab active"><span className="tab-dot" />Untitled query</div>
-                <button className="icon-button small" aria-label="New query" onClick={() => setSql("")}><Plus size={15} /></button>
+              <div className="editor-tabs" data-testid="query-tabs">
+                {queryTabs.map((tab) => <div className={`editor-tab ${tab.id === activeQueryTabId ? "active" : ""}`} key={tab.id}><button className="query-tab-select" onClick={() => setActiveQueryTabId(tab.id)}><span className="tab-dot" />{tab.title}</button><button className="query-tab-close" aria-label={`Close ${tab.title}`} onClick={() => closeQueryTab(tab.id)}>×</button></div>)}
+                <button className="icon-button small" aria-label="New query" data-testid="new-query-tab" onClick={createQueryTab}><Plus size={15} /></button>
                 <div className="editor-tab-spacer" />
                 <span className="connection-status"><span className={`status-dot ${connection ? "connected" : ""}`} />{connection ? connection.database : "Not connected"}</span>
               </div>
               <div className="editor-canvas real-editor">
                 <div className="line-numbers"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
-                <textarea
-                  aria-label="SQL editor"
-                  data-testid="sql-editor"
-                  className="sql-editor"
-                  spellCheck={false}
-                  value={sql}
-                  onChange={(event) => setSql(event.target.value)}
-                  onKeyDown={handleEditorKeyDown}
-                  placeholder="Write a SQL query…"
-                />
+                <div className="monaco-editor-host" data-testid="monaco-editor"><Editor height="100%" language="sql" theme="vs-dark" value={sql} onChange={(value) => setSql(value ?? "")} options={{ automaticLayout: true, minimap: { enabled: false }, fontSize: 12, lineHeight: 21, tabSize: 2, wordWrap: "on", scrollBeyondLastLine: false, suggestOnTriggerCharacters: true, quickSuggestions: true, padding: { top: 18, bottom: 56 } }} wrapperProps={{ "data-testid": "sql-editor" }} onMount={(editor, monaco) => { (window as typeof window & { __dbuxMonacoEditor?: typeof editor }).__dbuxMonacoEditor = editor; editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => void runQuery()); if (!sqlCompletionProviderRegistered) { sqlCompletionProviderRegistered = true; monaco.languages.registerCompletionItemProvider("sql", { provideCompletionItems: (model, position) => { const word = model.getWordUntilPosition(position); const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn }; const words = ["SELECT","FROM","WHERE","JOIN","LEFT JOIN","INNER JOIN","GROUP BY","ORDER BY","HAVING","LIMIT","INSERT INTO","UPDATE","DELETE FROM","CREATE TABLE","ALTER TABLE","DROP TABLE","WITH","RETURNING","AND","OR","NULL","AS","DISTINCT","COUNT","SUM","AVG","MIN","MAX"]; const suggestions = words.map((label) => ({ label, kind: monaco.languages.CompletionItemKind.Keyword, insertText: label, detail: "SQL keyword", range })); for (const object of schemaObjectsRef.current) { suggestions.push({ label: `${object.schemaName}.${object.objectName}`, kind: monaco.languages.CompletionItemKind.Class, detail: "Table or view", insertText: `\"${object.schemaName}\".\"${object.objectName}\"`, range }); for (const column of object.columns) suggestions.push({ label: column.name, kind: monaco.languages.CompletionItemKind.Field, detail: `${object.objectName} · ${column.dataType}`, insertText: `\"${column.name}\"`, range }); } return { suggestions }; } }); } }} /></div>
                 <div className="editor-hint">
-                  <button className="run-query-button" data-testid="run-query" onClick={() => void runQuery()} disabled={!connection || running || !sql.trim()}>
-                    <Play size={12} fill="currentColor" /> {running ? "Running…" : "Run query"}
-                  </button>
-                  <kbd>⌘ ↵</kbd>
+                  <button className="run-query-button" data-testid="run-query" onClick={() => void runQuery()} disabled={!connection || running || !sql.trim()}><Play size={12} fill="currentColor" /> {running ? "Running…" : "Run query"}</button>
+                  {running && <button className="cancel-query-button" data-testid="cancel-query" onClick={() => void cancelQuery()}>Cancel</button>}
+                  <button className="secondary-button save-query-button" data-testid="save-query" onClick={saveCurrentQuery} disabled={!sql.trim()}>Save query</button><kbd>⌘ ↵</kbd>
                 </div>
               </div>
               <div className="results-panel">
@@ -400,10 +407,11 @@ export default function App() {
                 )}
               </div>
             </div>
-          ) : activeTab === "history" ? (
+           ) : activeTab === "history" ? (
             <div className="history-view">
-              {history.length ? history.map((item, index) => (
-                <button className="history-item" key={index} onClick={() => { setSql(item.sql); setActiveTab("query"); }}>
+              <input className="list-search" aria-label="Search query history" data-testid="history-search" placeholder="Search query history…" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
+              {history.filter((item) => item.sql.toLowerCase().includes(historySearch.toLowerCase()) || item.message.toLowerCase().includes(historySearch.toLowerCase())).length ? history.filter((item) => item.sql.toLowerCase().includes(historySearch.toLowerCase()) || item.message.toLowerCase().includes(historySearch.toLowerCase())).map((item) => (
+                <button className="history-item" key={item.id} onClick={() => { createQueryTab(); setQueryTabs((tabs) => { const last = tabs[tabs.length - 1]; return [...tabs.slice(0, -1), { ...last, title: "History query", sql: item.sql }]; }); setActiveTab("query"); }}>
                   <code>{item.sql}</code><span>{item.message}</span><small>{item.time}</small>
                 </button>
               )) : (
@@ -414,6 +422,11 @@ export default function App() {
                   <button className="secondary-button" onClick={() => setActiveTab("query")}>Open query editor</button>
                 </div>
               )}
+            </div>
+           ) : activeTab === "saved" ? (
+            <div className="history-view" data-testid="saved-queries-view"><input className="list-search" aria-label="Search saved queries" placeholder="Search saved queries…" value={savedSearch} onChange={(event) => setSavedSearch(event.target.value)} />
+              {savedQueries.filter((item) => item.name.toLowerCase().includes(savedSearch.toLowerCase()) || item.sql.toLowerCase().includes(savedSearch.toLowerCase())).map((item) => <div className="saved-query-item" key={item.id}><button className="saved-query-open" onClick={() => { createQueryTab(); setQueryTabs((tabs) => { const last = tabs[tabs.length - 1]; return [...tabs.slice(0, -1), { ...last, title: item.name, sql: item.sql }]; }); }}><strong>{item.name}</strong><code>{item.sql}</code></button><button className="query-tab-close" aria-label={`Delete ${item.name}`} onClick={() => deleteSavedQuery(item.id)}>×</button></div>)}
+              {!savedQueries.length && <div className="history-empty"><strong>No saved queries</strong><span>Use Save query in the editor to keep reusable SQL locally.</span></div>}
             </div>
           ) : (
             <div className="schema-view" data-testid="schema-explorer">
@@ -586,10 +599,11 @@ export default function App() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !connecting) setShowConnectionForm(false); }}>
           <section className="connection-modal" role="dialog" aria-modal="true" aria-labelledby="connection-title">
             <div className="modal-heading">
-              <div><span className="eyebrow">DATABASE CONNECTION</span><h2 id="connection-title">Connect to PostgreSQL</h2><p>Credentials are used for this session and are not saved.</p></div>
+              <div><span className="eyebrow">DATABASE CONNECTION</span><h2 id="connection-title">Connect to PostgreSQL</h2><p>Connection settings are saved locally without passwords.</p></div>
               <button className="icon-button" aria-label="Close dialog" disabled={connecting} onClick={() => setShowConnectionForm(false)}><X size={16} /></button>
             </div>
             <label>Connection name<input aria-label="Connection name" value={form.name} onChange={(event) => updateForm("name", event.target.value)} /></label>
+            {savedProfiles.length > 0 && <label>Saved profile<select aria-label="Saved connection profile" value="" onChange={(event) => { const profile = savedProfiles.find((item) => item.name === event.target.value); if (profile) setForm({ ...profile, password: "" }); }}><option value="">Choose a saved profile…</option>{savedProfiles.map((profile) => <option key={profile.name} value={profile.name}>{profile.name} · {profile.host}/{profile.database}</option>)}</select></label>}
             <div className="form-row">
               <label>Host<input aria-label="Host" value={form.host} onChange={(event) => updateForm("host", event.target.value)} autoComplete="off" /></label>
               <label>Port<input aria-label="Port" type="number" value={form.port} onChange={(event) => updateForm("port", event.target.value)} /></label>
@@ -600,7 +614,7 @@ export default function App() {
             <label>SSL mode<select aria-label="SSL mode" value={form.sslMode} onChange={(event) => updateForm("sslMode", event.target.value)}><option value="prefer">Prefer</option><option value="require">Require</option><option value="verify-ca">Verify CA</option><option value="verify-full">Verify full</option><option value="disable">Disable (local only)</option></select></label>
             {connectionError && <div className="form-error" role="alert" data-testid="connection-error">{connectionError}</div>}
             <div className="modal-footer"><button className="secondary-button" disabled={connecting} onClick={() => setShowConnectionForm(false)}>Cancel</button><button className="primary-button" data-testid="connect-database" disabled={connecting} onClick={() => void connect()}>{connecting ? "Connecting…" : "Connect to database"}</button></div>
-            <div className="form-note"><ShieldCheck size={15} /><span>Credentials are not persisted. Avoid connecting to untrusted databases.</span></div>
+            <div className="form-note"><ShieldCheck size={15} /><span>Passwords are never stored in connection profiles. TLS validation uses PostgreSQL system trust roots.</span></div>
           </section>
         </div>
       )}

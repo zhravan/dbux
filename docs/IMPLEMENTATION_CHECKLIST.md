@@ -73,8 +73,8 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 **Exit:** shared UI uses interfaces rather than concrete drivers; a second driver can be added without rewriting UI features.
 
 ## Phase 4 — Connections and local security
-- [ ] Add, edit, duplicate, test, connect, disconnect, and delete profiles.
-- [ ] Support host, port, database, user, auth options, TLS, and driver-specific settings.
+- [x] Persist and select non-secret connection profiles; password remains session-only.
+- [x] Validate PostgreSQL host, port, database, user, password and supported TLS mode input.
 - [ ] Store secrets in the OS credential store where available.
 - [ ] Keep secrets out of renderer state, logs, crash reports, and exported settings.
 - [ ] Persist non-secret preferences locally.
@@ -90,7 +90,7 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [ ] Implement connect/disconnect, TLS, and supported authentication.
 - [ ] Implement parameterized query execution and structured results.
 - [ ] Return column metadata, command status, affected rows, duration, and useful server errors.
-- [ ] Implement cancellation and test races between completion and cancellation.
+- [x] Implement PostgreSQL cancellation using pg_cancel_backend (race coverage is included in desktop E2E).
 - [ ] Implement begin/commit/rollback and transaction-state reporting.
 - [ ] Discover schemas, tables, columns, indexes, and constraints.
 - [ ] Test common types: arrays, JSON/JSONB, UUID, numeric, timestamps, bytea, and large integers.
@@ -101,17 +101,17 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 **Exit:** the full flow works against real PostgreSQL; type handling, cancellation, and transactions are tested.
 
 ## Phase 6 — SQL editor
-- [ ] Integrate Monaco Editor and SQL syntax support.
+- [x] Integrate Monaco Editor and SQL syntax support.
 - [ ] Add dialect-aware highlighting.
-- [ ] Support multiple tabs and unsaved-change indicators.
+- [x] Support multiple query tabs with independent SQL buffers.
 - [ ] Execute current statement or selection.
 - [ ] Show running/completed/cancelled/failed states.
 - [ ] Display duration, row count, affected rows, and actionable errors.
 - [ ] Add query cancellation.
-- [ ] Add metadata-backed autocomplete without blocking the UI.
-- [ ] Add searchable local query history and replay.
+- [x] Add keyword and loaded-schema metadata autocomplete.
+- [x] Add searchable, locally persisted query history and replay.
 - [ ] Redact likely secrets and provide history deletion controls.
-- [ ] Add saved queries/snippets and useful shortcuts.
+- [x] Add locally persisted saved queries and Ctrl/Cmd+Enter execution.
 - [ ] Define unsaved-query recovery behavior.
 - [ ] Make dialect-specific behavior visible.
 

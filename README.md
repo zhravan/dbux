@@ -48,6 +48,10 @@ Do not create or move release tags by hand. Keep PR titles/squash commits Conven
 
 CI runs on pull requests and pushes to `main`; feature branch pushes do not trigger a duplicate full run. Newer commits cancel superseded checks for the same PR.
 
+## SQL editor and connection workflows
+
+The editor uses Monaco with SQL syntax support, keyboard execution (Ctrl/Cmd+Enter), and completion for SQL keywords plus schema objects loaded from the connected PostgreSQL database. Query tabs preserve independent SQL buffers. Saved queries and query history are stored locally in the desktop webview; history is capped at 500 entries and searchable by SQL or result message. Connection profiles persist non-secret fields only: passwords are never written to local storage and must be entered when reconnecting. TLS modes are validated explicitly; certificate verification uses the platform/system trust roots exposed by SQLx (custom CA paths are not configurable yet). Running statements can be cancelled through PostgreSQL `pg_cancel_backend`; the database role must have permission to cancel the target backend.
+
 ## Export query results to CSV
 
 The query result grid includes an **Export CSV** action when a query returns columns. It exports only the result rows currently returned by DBUX (up to its existing 1,000-row cap). Fields are quoted, embedded quotes are escaped, commas and line breaks are preserved, UTF-8 output includes a BOM, and formula-like text fields are prefixed with an apostrophe. SQL NULL and empty text both export as empty CSV fields.

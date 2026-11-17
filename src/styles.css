@@ -64,3 +64,19 @@
 .export-csv-button svg{color:#9eafc7}
 .export-csv-button:disabled{cursor:not-allowed;opacity:.45}
 @media(max-width:900px){.results-tabs{gap:9px}.export-csv-button{padding:0 6px}}
+
+.monaco-editor-host{flex:1;min-width:0;min-height:170px;overflow:hidden}
+.monaco-editor-host .monaco-editor,.monaco-editor-host .overflow-guard{border-radius:0}
+.editor-tabs .editor-tab{padding:0 4px;gap:2px}
+.query-tab-select{height:100%;display:flex;align-items:center;gap:7px;padding:0 6px;border:0;background:transparent;color:inherit;font-size:10px}
+.query-tab-close{width:20px;height:20px;flex:none;border:0;border-radius:4px;background:transparent;color:#858d9b;font-size:16px;line-height:1}
+.query-tab-close:hover{background:#343944;color:#fff}
+.cancel-query-button{height:25px;padding:0 9px;border:1px solid #70444a;border-radius:5px;background:#392329;color:#f0b9be;font-size:10px}
+.save-query-button{height:25px;padding:0 8px;font-size:9px}
+.list-search{height:34px;flex:none;margin:0 0 10px;padding:0 11px;border:1px solid #343944;border-radius:5px;background:#171a20;color:#e3e7ef;font-size:11px;outline:none}
+.list-search:focus{border-color:#849cc3}
+.saved-query-item{display:flex;align-items:center;gap:10px;border-bottom:1px solid #2a2d36}
+.saved-query-open{display:flex;flex:1;min-width:0;flex-direction:column;gap:6px;padding:12px;border:0;background:transparent;text-align:left}
+.saved-query-open:hover{background:#1b1e25}
+.saved-query-open strong{color:#dce2ec;font-size:11px}
+.saved-query-open code{overflow:hidden;color:#929baa;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
