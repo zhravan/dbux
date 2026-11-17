@@ -32,6 +32,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      # Monaco's locally bundled editor workers increase Vite's production-build
+      # working set. Keep the V8 heap below the 7 GB ARM macOS runner limit.
+      NODE_OPTIONS: --max-old-space-size=4096
     strategy:
       fail-fast: false
       matrix:
