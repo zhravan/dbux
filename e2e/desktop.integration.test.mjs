@@ -391,6 +391,18 @@ test(
       await browser.wait(async () => ((await readDom('[data-testid="query-status"]')) ?? "").includes("Query failed"), 10_000, "Cancelled query did not settle");
       await executeSql("SELECT 7 AS after_cancel", "Query completed");
       assert.equal(await readDom('[data-testid="result-cell-0-0"]'), "7", "Connection should remain usable after cancellation");
+      await click('[data-testid="active-connection"] .connection-disconnect');
+      await click(".workspace-toolbar .primary-button");
+      await browser.wait(until.elementLocated(By.css('select[aria-label="Saved connection profile"]')), 5_000);
+      const savedProfile = await browser.findElement(By.css('select[aria-label="Saved connection profile"]'));
+      await savedProfile.sendKeys("CI PostgreSQL");
+      await fill('input[aria-label="Password"]', "definitely-not-the-password");
+      await click('[data-testid="connect-database"]');
+      await browser.wait(until.elementLocated(By.css('[data-testid="connection-error"]')), 10_000, "Invalid PostgreSQL credentials should be rejected");
+      await fill('input[aria-label="Password"]', process.env.DBUX_TEST_DB_PASSWORD ?? "dbux_test");
+      await click('[data-testid="connect-database"]');
+      const reconnected = await waitForConnection();
+      assert.equal(reconnected.ok, true, "A saved profile should reconnect when valid credentials are supplied");
     } catch (error) {
       if (browser) {
         try {
