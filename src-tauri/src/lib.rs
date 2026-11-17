@@ -136,19 +136,18 @@ async fn connect_postgres(
     if config.port == 0 {
         return Err("Port must be between 1 and 65535.".to_string());
     }
-    let ssl_mode = match config.ssl_mode.as_str() {
-        "disable" => PgSslMode::Disable,
-        "prefer" => PgSslMode::Prefer,
-        "require" => PgSslMode::Require,
-        "verify-ca" => PgSslMode::VerifyCa,
-        "verify-full" => PgSslMode::VerifyFull,
-        _ => {
-            return Err(
+    let ssl_mode =
+        match config.ssl_mode.as_str() {
+            "disable" => PgSslMode::Disable,
+            "prefer" => PgSslMode::Prefer,
+            "require" => PgSslMode::Require,
+            "verify-ca" => PgSslMode::VerifyCa,
+            "verify-full" => PgSslMode::VerifyFull,
+            _ => return Err(
                 "Unsupported TLS mode. Choose disable, prefer, require, verify-ca, or verify-full."
                     .to_string(),
-            )
-        }
-    };
+            ),
+        };
 
     let options = PgConnectOptions::new()
         .host(&config.host)
