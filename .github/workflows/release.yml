@@ -163,6 +163,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # gh release commands need a Git worktree to resolve repository context.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           pattern: dbux-installers-*-${{ needs.validate-version.outputs.tag_name }}
