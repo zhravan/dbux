@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.1](https://github.com/zhravan/dbux/compare/dbux-v0.7.0...dbux-v0.7.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **installer:** detect macOS DMG mount using plist output ([15f4cbd](https://github.com/zhravan/dbux/commit/15f4cbd72c2b1ea1660c14301927801c97587f0a))
+* **installer:** mount macOS DMG at a deterministic path ([976f05c](https://github.com/zhravan/dbux/commit/976f05c12b40cc87c3382d95e21d79416adbfae5))
+* **installer:** resolve latest published stable release ([c7b3b53](https://github.com/zhravan/dbux/commit/c7b3b5312b5dd10bce1252b85741e8d8147bbbca))
+* **release:** build installers when a release is published ([e0124ee](https://github.com/zhravan/dbux/commit/e0124ee4688c3b48f499123caaaec7e8fce36169))
+* **release:** checkout repository before publishing ([4c5e5a1](https://github.com/zhravan/dbux/commit/4c5e5a15f8dc8740c4c2703c67b179bf3aa85647))
+* **release:** make manual release retries publish correctly ([2ca37cf](https://github.com/zhravan/dbux/commit/2ca37cf32e1717da06a86d64008dad08afd0fa8f))
+
 ## [0.7.0](https://github.com/zhravan/dbux/compare/dbux-v0.6.0...dbux-v0.7.0) (2026-11-17)
 
 
