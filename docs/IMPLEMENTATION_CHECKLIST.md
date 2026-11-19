@@ -1,18 +1,25 @@
 # DBUX Implementation Checklist
 
+> **Repository audit — 2026-11-19**
+> - **Implemented and evidenced in the current code/tests:** PostgreSQL connect/disconnect and TLS modes; local non-secret connection profiles; Monaco SQL editor with multiple tabs, autocomplete, query history and saved queries; query execution/cancellation; PostgreSQL schema, column, index and constraint browsing; bounded table previews and 1,000-row query results; CSV export; CI and cross-platform installer artifact generation.
+> - **Partially implemented:** the desktop shell and CI quality gates; PostgreSQL type fidelity; CSV/result-grid workflows; release distribution. These have meaningful functionality but do not yet meet every acceptance criterion below.
+> - **Not implemented:** SQLite/MySQL/MariaDB/DuckDB drivers, a shared driver contract, OS keychain secret storage, transactions UI, editable rows, virtualized/sortable/filterable results, CSV import, JSON export, SSH tunnels, and advanced schema tooling.
+>
+> A checked item means the specific capability is present in the current repository and has suitable test or implementation evidence. An unchecked item is still open or lacks enough evidence; it does not necessarily mean no groundwork exists. Release artifact generation is not the same as a clean install test on every OS.
+
 A developer-first, database-agnostic desktop workbench. Keep it fast, predictable, keyboard-friendly, local-first, and intentionally free of AI features, chat panels, and unnecessary product clutter.
 
 ## Product principles
-- [ ] Focus the UI on connections, SQL, schemas, and results.
-- [ ] Prefer explicit behavior over hidden automation.
-- [ ] Make common workflows fast with keyboard navigation and shortcuts.
-- [ ] Keep core functionality local; no account or cloud service required.
+- [x] Focus the UI on connections, SQL, schemas, and results.
+- [x] Prefer explicit behavior over hidden automation.
+- [x] Make common workflows fast with keyboard navigation and shortcuts.
+- [x] Keep core functionality local; no account or cloud service required.
 - [ ] Treat credentials, query history, result data, and logs as sensitive.
 - [ ] Keep engine-specific behavior inside drivers/dialect modules.
-- [ ] Represent unsupported capabilities honestly.
-- [ ] No AI chat, generated SQL, AI agents, telemetry by default, or decorative dashboards.
+- [x] Represent unsupported capabilities honestly.
+- [x] No AI chat, generated SQL, AI agents, telemetry by default, or decorative dashboards.
 - [ ] Use restrained visual hierarchy, consistent spacing, typography, focus states, and useful empty/error/loading states.
-- [ ] Ship fewer features reliably rather than exposing incomplete controls.
+- [x] Ship fewer features reliably rather than exposing incomplete controls.
 
 ## Phase 0 — Scope and architecture
 - [ ] Define v1: desktop SQL workbench with PostgreSQL and SQLite.
@@ -33,10 +40,10 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [ ] Add lockfiles and reproducible setup instructions.
 - [ ] Enable TypeScript strict mode and consistent import conventions.
 - [ ] Configure formatting/linting for TypeScript, styles, and Rust.
-- [ ] Add unit, integration, and end-to-end test commands.
-- [ ] Add CI for formatting, lint, type-check, tests, and production build.
+- [x] Add unit, integration, and end-to-end test commands.
+- [x] Add CI for formatting, lint, type-check, tests, and production build.
 - [ ] Add concise contribution guide and issue templates.
-- [ ] Replace placeholder README with purpose, status, setup, and known limitations.
+- [x] Replace placeholder README with purpose, status, setup, and known limitations.
 - [ ] Ensure secrets and local environment files are ignored.
 - [ ] Verify clean checkout → install → test → build.
 
@@ -44,7 +51,7 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 
 ## Phase 2 — Desktop shell and UX
 - [ ] Build application window and native menu.
-- [ ] Implement connection/schema sidebar, central workspace, results area, and status bar.
+- [x] Implement connection/schema sidebar, central workspace, results area, and status bar.
 - [ ] Support resizable panes and sensible minimum sizes.
 - [ ] Add light/dark themes and shared design tokens.
 - [ ] Build connection, editor, results, settings, loading, empty, error, and disconnected states.
@@ -87,15 +94,15 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 **Exit:** failed connections leave no hanging sessions; displayed connection state matches backend state; credentials do not appear in ordinary logs.
 
 ## Phase 5 — PostgreSQL vertical slice
-- [ ] Implement connect/disconnect, TLS, and supported authentication.
+- [x] Implement connect/disconnect, TLS, and supported authentication.
 - [ ] Implement parameterized query execution and structured results.
 - [ ] Return column metadata, command status, affected rows, duration, and useful server errors.
 - [x] Implement PostgreSQL cancellation using pg_cancel_backend (race coverage is included in desktop E2E).
 - [ ] Implement begin/commit/rollback and transaction-state reporting.
-- [ ] Discover schemas, tables, columns, indexes, and constraints.
+- [x] Discover schemas, tables, columns, indexes, and constraints.
 - [ ] Test common types: arrays, JSON/JSONB, UUID, numeric, timestamps, bytea, and large integers.
 - [ ] Test invalid credentials, TLS failures, timeouts, query errors, server restarts, and disconnections.
-- [ ] Run integration tests against a real PostgreSQL instance.
+- [x] Run integration tests against a real PostgreSQL instance.
 - [ ] Verify the complete flow: create connection → connect → execute SQL → inspect results → disconnect.
 
 **Exit:** the full flow works against real PostgreSQL; type handling, cancellation, and transactions are tested.
@@ -107,7 +114,7 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [ ] Execute current statement or selection.
 - [ ] Show running/completed/cancelled/failed states.
 - [ ] Display duration, row count, affected rows, and actionable errors.
-- [ ] Add query cancellation.
+- [x] Add query cancellation.
 - [x] Add keyword and loaded-schema metadata autocomplete.
 - [x] Add searchable, locally persisted query history and replay.
 - [ ] Redact likely secrets and provide history deletion controls.
@@ -120,22 +127,22 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 ## Phase 7 — Results grid
 - [ ] Build a virtualized grid for large result sets.
 - [ ] Render null, boolean, numeric, date/time, JSON, binary, and long text clearly.
-- [ ] Distinguish null from empty string and zero.
+- [x] Distinguish null from empty string and zero.
 - [ ] Support scrolling, column resizing, and clear type labels.
 - [ ] Support sorting/filtering; distinguish server-side from local operations.
-- [ ] Use bounded fetching/pagination rather than loading every row.
+- [x] Use bounded fetching/pagination rather than loading every row.
 - [ ] Add copy cell/row/selection and CSV/JSON export.
 - [ ] Handle empty results, command-only results, multiple result sets where supported, and errors.
-- [ ] Indicate truncation, row limits, and loading.
+- [x] Indicate truncation, row limits, and loading.
 - [ ] Test wide tables, long values, binary data, and large row counts.
 
 **Exit:** results remain responsive within documented limits and partial/truncated results are clearly identified.
 
 ## Phase 8 — Schema explorer and editing
 - [ ] Browse databases/catalogs, schemas, tables, views, and supported objects.
-- [ ] Show columns, types, nullability, defaults, keys, indexes, and constraints.
-- [ ] Refresh metadata and handle schema changes.
-- [ ] Browse tables with bounded fetching, filters, and ordering.
+- [x] Show columns, types, nullability, defaults, keys, indexes, and constraints.
+- [x] Refresh metadata and handle schema changes.
+- [x] Browse tables with bounded fetching, filters, and ordering.
 - [ ] Enable edits only when rows can be identified safely.
 - [ ] Make insert/update/delete explicit and reviewable.
 - [ ] Show pending changes with save/discard controls.
@@ -151,7 +158,7 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [ ] Handle quoting, delimiters, newlines, encodings, nulls, dates, and large files.
 - [ ] Import CSV with preview, column mapping, type validation, and row-level errors.
 - [ ] Use transactions/batches where supported and explain partial failure.
-- [ ] Add saved query organization and search.
+- [x] Add saved query organization and search.
 - [ ] Add history management and clear-history controls.
 - [ ] Add explain-plan retrieval where supported, with engine-specific presentation.
 - [ ] Add optional dialect-aware SQL formatting.
@@ -199,10 +206,10 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 **Exit:** no known critical security issues remain open; resource use is bounded under defined stress tests.
 
 ## Phase 12 — Packaging and releases
-- [ ] Build macOS, Windows, and Linux artifacts.
+- [x] Build macOS, Windows, and Linux artifacts.
 - [ ] Test clean installation on each claimed platform.
 - [ ] Configure signing/notarization where required and available.
-- [ ] Add versioning, release notes, checksums, and GitHub Releases.
+- [x] Add versioning, release notes, checksums, and GitHub Releases.
 - [ ] Test upgrades and preservation of local settings.
 - [ ] Document uninstall behavior and local data retention.
 - [ ] Keep diagnostics free of secrets and query contents by default.
@@ -211,13 +218,13 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 **Exit:** users can install each claimed platform build and upgrade without losing settings unexpectedly.
 
 ## Phase 13 — Documentation and maintenance
-- [ ] Write a concise README with status, install, development setup, and limitations.
-- [ ] Document architecture, driver API, troubleshooting, and contribution workflow.
+- [x] Write a concise README with status, install, development setup, and limitations.
+- [x] Document architecture, driver API, troubleshooting, and contribution workflow.
 - [ ] Provide an example driver and driver contribution guide.
 - [ ] Add bug/feature issue templates.
 - [ ] Define supported database/OS versions and security reporting.
 - [ ] Distinguish implemented, planned, and experimental features.
-- [ ] Preserve MIT notices and track third-party license obligations.
+- [x] Preserve MIT notices and track third-party license obligations.
 
 ## v1 definition of done
 - [ ] Installs and launches on supported platforms.
@@ -232,11 +239,11 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [ ] No AI features, no required account, and no unnecessary cloud dependency.
 
 ## Explicitly out of scope for v1
-- [ ] AI chat, AI-generated SQL, and AI agents.
-- [ ] Cloud account, hosted synchronization, or team workspace.
-- [ ] Universal support for every database at launch.
-- [ ] Full ER modeling, migration orchestration, and schema diff.
-- [ ] Third-party plugin marketplace before the driver API is stable.
+- [x] AI chat, AI-generated SQL, and AI agents.
+- [x] Cloud account, hosted synchronization, or team workspace.
+- [x] Universal support for every database at launch.
+- [x] Full ER modeling, migration orchestration, and schema diff.
+- [x] Third-party plugin marketplace before the driver API is stable.
 
 ## Working rules
 - [ ] Work in small, reviewable increments with conventional commits.
