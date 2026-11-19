@@ -44,7 +44,9 @@ jobs:
   validate-version:
     name: Validate SemVer and synchronized app versions
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+    # workflow_dispatch intentionally skips release-please; always() allows the
+    # explicit-tag retry path to run despite that skipped dependency.
+    if: always() && (needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -186,6 +188,7 @@ jobs:
       - name: Attach installers and publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.validate-version.outputs.tag_name }}
         run: |
           set -euo pipefail
@@ -210,17 +213,18 @@ jobs:
             RELEASE_KIND="stable"
           fi
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          # Use an explicit repository so gh never has to infer it from local Git state.
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GH_REPO"
             if [[ "$RELEASE_KIND" == "prerelease" ]]; then
-              gh release edit "$RELEASE_TAG" --draft=false --prerelease
+              gh release edit "$RELEASE_TAG" --draft=false --prerelease --repo "$GH_REPO"
             else
-              gh release edit "$RELEASE_TAG" --draft=false
+              gh release edit "$RELEASE_TAG" --draft=false --repo "$GH_REPO"
             fi
           else
             if [[ "$RELEASE_KIND" == "prerelease" ]]; then
-              gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --prerelease
+              gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --prerelease --repo "$GH_REPO"
             else
-              gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes
+              gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --repo "$GH_REPO"
             fi
           fi
