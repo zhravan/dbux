@@ -134,9 +134,20 @@ LAUNCH
   macos:*.dmg)
     command -v hdiutil >/dev/null 2>&1 || fail "hdiutil is required to mount the DMG."
     mkdir -p "$HOME/Applications"
-    attach_output="$(hdiutil attach "$TMP_DIR/$FILE_NAME" -nobrowse -quiet)"
-    MOUNT="$(printf '%s\n' "$attach_output" | awk '/\/Volumes\// {print $NF; exit}')"
-    [ -n "$MOUNT" ] || fail "Could not locate the mounted DMG volume."
+    # Use hdiutil's plist output: -quiet suppresses the mount details,
+    # and parsing human-readable output breaks when volume names contain spaces.
+    attach_output="$(hdiutil attach -plist -nobrowse "$TMP_DIR/$FILE_NAME")" ||
+      fail "Could not mount $FILE_NAME. Check that the disk image is valid and try again."
+    MOUNT="$(printf '%s' "$attach_output" | python3 -c '
+import plistlib, sys
+data = plistlib.load(sys.stdin.buffer)
+for entity in data.get("system-entities", []):
+    mount_point = entity.get("mount-point")
+    if mount_point:
+        print(mount_point)
+        break
+')"
+    [ -n "$MOUNT" ] || fail "The DMG mounted, but macOS did not report a mount point."
     APP="$(find "$MOUNT" -type d -name 'DBUX.app' -print -quit)"
     [ -n "$APP" ] || fail "No DBUX.app bundle found inside the DMG."
     ditto "$APP" "$HOME/Applications/DBUX.app"
