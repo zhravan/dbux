@@ -2,7 +2,7 @@
 set -eu
 
 REPO="zhravan/dbux"
-API="https://api.github.com/repos/$REPO/releases/latest"
+API="https://api.github.com/repos/$REPO/releases?per_page=100"
 TMP_DIR="$(mktemp -d)"
 MOUNT=""
 cleanup() {
@@ -43,14 +43,34 @@ curl --fail --silent --show-error --location \
   -H "Accept: application/vnd.github+json" \
   -H "User-Agent: DBUX-installer" \
   "$API" -o "$TMP_DIR/release.json" ||
-  fail "Could not fetch the latest release. Check https://github.com/$REPO/releases"
+  fail "Could not query GitHub releases (network error, API limit, or repository access issue). Check https://github.com/$REPO/releases"
 
 ASSET_URL="$(python3 - "$TMP_DIR/release.json" "$PLATFORM" "$ARCH" "$FORMAT" <<'PY'
 import json, sys
 
 path, platform, arch, fmt = sys.argv[1:]
 with open(path, encoding="utf-8") as handle:
-    assets = json.load(handle).get("assets", [])
+    releases = json.load(handle)
+
+# The GitHub /releases/latest endpoint returns 404 when every release is a
+# draft. Select the newest published stable release explicitly and ignore drafts.
+published = [
+    release for release in releases
+    if not release.get("draft") and not release.get("prerelease")
+]
+if not published:
+    raise SystemExit(
+        "No published stable DBUX release exists yet. "
+        "The release must be published in GitHub Actions first: "
+        f"https://github.com/{'zhravan/dbux'}/releases"
+    )
+
+release = published[0]
+assets = release.get("assets", [])
+if not assets:
+    raise SystemExit(
+        f"Latest published release {release.get('tag_name', 'unknown')} has no installer assets."
+    )
 
 tokens = ("x86_64", "amd64", "x64") if arch == "x86_64" else ("aarch64", "arm64")
 extensions = {"dmg": (".dmg",), "deb": (".deb",), "rpm": (".rpm",), "appimage": (".appimage",)}
@@ -72,7 +92,7 @@ else:
 print(chosen["browser_download_url"])
 PY
 )"
-[ -n "$ASSET_URL" ] || fail "No compatible $PLATFORM installer found. See https://github.com/$REPO/releases/latest"
+[ -n "$ASSET_URL" ] || fail "No compatible $PLATFORM/$ARCH installer found in the latest published stable release. See https://github.com/$REPO/releases"
 FILE_NAME="$(basename "$ASSET_URL")"
 curl --fail --silent --show-error --location "$ASSET_URL" -o "$TMP_DIR/$FILE_NAME" ||
   fail "Failed to download $FILE_NAME"
@@ -126,5 +146,5 @@ LAUNCH
     printf 'If macOS blocks the app, approve it under System Settings > Privacy & Security; release builds are not notarized.\n'
     open "$HOME/Applications/DBUX.app" || true
     ;;
-  *) fail "Unsupported release asset: $FILE_NAME. See https://github.com/$REPO/releases/latest" ;;
+  *) fail "Unsupported release asset: $FILE_NAME. See https://github.com/$REPO/releases" ;;
 esac
