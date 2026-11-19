@@ -102,7 +102,7 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [x] Discover schemas, tables, columns, indexes, and constraints.
 - [ ] Test common types: arrays, JSON/JSONB, UUID, numeric, timestamps, bytea, and large integers.
 - [ ] Test invalid credentials, TLS failures, timeouts, query errors, server restarts, and disconnections.
-- [x] Run integration tests against a real PostgreSQL instance.
+- [ ] Run integration tests against a real PostgreSQL instance. (The CI end-to-end run is present but has not yet completed successfully in this audit.)
 - [ ] Verify the complete flow: create connection → connect → execute SQL → inspect results → disconnect.
 
 **Exit:** the full flow works against real PostgreSQL; type handling, cancellation, and transactions are tested.
@@ -142,7 +142,7 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [ ] Browse databases/catalogs, schemas, tables, views, and supported objects.
 - [x] Show columns, types, nullability, defaults, keys, indexes, and constraints.
 - [x] Refresh metadata and handle schema changes.
-- [x] Browse tables with bounded fetching, filters, and ordering.
+- [ ] Add server-side table-preview filters and ordering. (Bounded preview is implemented; filters and ordering are not.)
 - [ ] Enable edits only when rows can be identified safely.
 - [ ] Make insert/update/delete explicit and reviewable.
 - [ ] Show pending changes with save/discard controls.
@@ -154,7 +154,8 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 **Exit:** browsing is bounded, edits target intended rows, and pending changes can be discarded.
 
 ## Phase 9 — Import, export, and productivity
-- [ ] Export results to CSV and JSON.
+- [x] Export query results to CSV.
+- [ ] Export query results to JSON.
 - [ ] Handle quoting, delimiters, newlines, encodings, nulls, dates, and large files.
 - [ ] Import CSV with preview, column mapping, type validation, and row-level errors.
 - [ ] Use transactions/batches where supported and explain partial failure.
@@ -209,7 +210,8 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 - [x] Build macOS, Windows, and Linux artifacts.
 - [ ] Test clean installation on each claimed platform.
 - [ ] Configure signing/notarization where required and available.
-- [x] Add versioning, release notes, checksums, and GitHub Releases.
+- [x] Add versioning, release notes, and GitHub Releases.
+- [ ] Publish and verify checksums for release assets.
 - [ ] Test upgrades and preservation of local settings.
 - [ ] Document uninstall behavior and local data retention.
 - [ ] Keep diagnostics free of secrets and query contents by default.
@@ -219,12 +221,14 @@ A developer-first, database-agnostic desktop workbench. Keep it fast, predictabl
 
 ## Phase 13 — Documentation and maintenance
 - [x] Write a concise README with status, install, development setup, and limitations.
-- [x] Document architecture, driver API, troubleshooting, and contribution workflow.
+- [x] Record the initial desktop architecture decision in an ADR.
+- [ ] Document the stable driver API, troubleshooting, and contribution workflow.
 - [ ] Provide an example driver and driver contribution guide.
 - [ ] Add bug/feature issue templates.
 - [ ] Define supported database/OS versions and security reporting.
 - [ ] Distinguish implemented, planned, and experimental features.
-- [x] Preserve MIT notices and track third-party license obligations.
+- [x] Preserve the repository MIT license.
+- [ ] Track third-party dependency license obligations.
 
 ## v1 definition of done
 - [ ] Installs and launches on supported platforms.
