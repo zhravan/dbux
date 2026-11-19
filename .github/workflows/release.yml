@@ -3,6 +3,9 @@ name: Release desktop installers
 on:
   push:
     branches: [main]
+  # Also recover when a draft is manually published from the GitHub UI.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -46,7 +49,7 @@ jobs:
     needs: release-please
     # workflow_dispatch intentionally skips release-please; always() allows the
     # explicit-tag retry path to run despite that skipped dependency.
-    if: always() && (needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''))
+    if: always() && (needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '') || (github.event_name == 'release' && github.event.action == 'published'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -61,7 +64,7 @@ jobs:
           ref: ${{ github.sha }}
       - name: Ensure release tag exists
         env:
-          RELEASE_TAG: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.event.release.tag_name || needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
           if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
@@ -76,7 +79,7 @@ jobs:
       - name: Validate SemVer tag and synchronized app versions
         id: validate
         env:
-          RELEASE_TAG: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.event.release.tag_name || needs.release-please.outputs.tag_name }}
         run: |
           node scripts/validate-release-version.mjs "$RELEASE_TAG"
           echo "tag_name=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
